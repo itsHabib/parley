@@ -5,7 +5,8 @@ set -e
 cd "$(dirname "$0")"
 
 echo "== plane 1: Haskell — compile the global protocol =="
-make -C compiler build test emit check
+make -C compiler build test check
+( cd compiler && ./bin/parleyc compile ../protocols/evidence-pipeline.parley ../contracts )
 
 echo
 echo "== plane 3: Lean — check the theorems =="

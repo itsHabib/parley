@@ -17,7 +17,21 @@ boundary, in the style of switchboard's agents-as-processes.
 
 ### 1. `compiler/` — Haskell, the compile plane
 
-A global protocol algebra (`Message`, `Choice`, `End`) projected into per-role
+Protocols are plain-text files (`protocols/*.parley`):
+
+```
+protocol evidence-pipeline
+roles producer collector kernel human gate
+
+producer -> collector: evidence.receipt
+choice collector observes producer kernel human gate {
+  accepted  { collector -> kernel: validate ... }
+  malformed { collector -> producer: receipt.rejected }
+}
+```
+
+`parleyc compile <file.parley> <dir>` parses that into the global protocol
+algebra (`Message`, `Choice`, `End`) and projects it into per-role
 local contracts (`Send` / `Receive` / `Select` / `Offer` / `Done`). Projection
 **refuses** incoherent protocols at the exact role and branch path:
 
@@ -99,6 +113,5 @@ undeclared roles with identical branches do).
 ## Where this could go
 
 - Point switchboard's registry at the bus so real sessions run behind it.
-- A `parleyc` protocol *parser* (today the protocol is a Haskell value).
 - Multiparty choices (n-ary branches), loops/recursion in the algebra.
 - Prove projection faithfulness in general, not per-trace.

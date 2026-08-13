@@ -1,0 +1,22 @@
+protocol evidence-pipeline
+roles producer collector kernel human gate
+
+# Producer submits an evidence receipt; collector triages it.
+producer -> collector: evidence.receipt
+choice collector observes producer kernel human gate {
+  accepted {
+    collector -> kernel: validate
+    choice kernel observes collector human gate {
+      pass {
+        kernel -> gate: assurance.pass
+      }
+      gap {
+        kernel -> human: assurance.gap
+        human -> gate: judgment
+      }
+    }
+  }
+  malformed {
+    collector -> producer: receipt.rejected
+  }
+}

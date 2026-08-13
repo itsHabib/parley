@@ -1,17 +1,73 @@
 module Main (main) where
 
 import Example (invalidProtocol, roles, validProtocol)
+import Parse (Parsed (..), parseProtocol)
 import Protocol
 import System.Exit (exitFailure)
 
 main :: IO ()
 main = do
-  results <- mapM run cases
-  if and results then putStrLn (show (length cases) ++ " ok") else exitFailure
+  fileCase <- parityCase
+  let all_ = cases ++ parseCases ++ [fileCase]
+  results <- mapM run all_
+  if and results then putStrLn (show (length all_) ++ " ok") else exitFailure
   where
     run (name, ok) = do
       putStrLn ((if ok then "ok   " else "FAIL ") ++ name)
       pure ok
+
+-- The committed textual protocol must parse to exactly the builtin value
+-- the Gleam demo contracts and the Lean theorems are stated against.
+parityCase :: IO (String, Bool)
+parityCase = do
+  source <- readFile "../protocols/evidence-pipeline.parley"
+  pure
+    ( "evidence-pipeline.parley parses to the builtin protocol",
+      parseProtocol source
+        == Right (Parsed "evidence-pipeline" roles validProtocol)
+    )
+
+parseCases :: [(String, Bool)]
+parseCases =
+  [ ( "message chains parse in sequence",
+      parseProtocol "protocol p\nroles a b\na -> b: x\nb -> a: y\n"
+        == Right (Parsed "p" ["a", "b"] (Message "a" "b" "x" (Message "b" "a" "y" End)))
+    ),
+    ( "comments and blank lines are ignored",
+      parseProtocol "protocol p\nroles a b\n\n# hi\na -> b: x # trailing\n"
+        == Right (Parsed "p" ["a", "b"] (Message "a" "b" "x" End))
+    ),
+    ( "choice parses with observers and two branches",
+      parseProtocol
+        "protocol p\nroles a b c\nchoice a observes b c {\n l { a -> b: x }\n r { a -> c: y }\n}\n"
+        == Right
+          ( Parsed
+              "p"
+              ["a", "b", "c"]
+              ( Choice
+                  "a"
+                  ["b", "c"]
+                  "l"
+                  (Message "a" "b" "x" End)
+                  "r"
+                  (Message "a" "c" "y" End)
+              )
+          )
+    ),
+    ( "statements after a choice are refused",
+      isParseError
+        (parseProtocol "protocol p\nroles a b\nchoice a observes b {\n l { }\n r { }\n}\na -> b: x\n")
+    ),
+    ( "a third branch is refused",
+      isParseError
+        (parseProtocol "protocol p\nroles a b\nchoice a observes b {\n l { }\n r { }\n m { }\n}\n")
+    ),
+    ( "unclosed braces are refused",
+      isParseError (parseProtocol "protocol p\nroles a b\nchoice a observes b {\n l { }\n r { \n")
+    )
+  ]
+  where
+    isParseError = either (const True) (const False)
 
 cases :: [(String, Bool)]
 cases =
