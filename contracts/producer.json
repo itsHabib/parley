@@ -1,0 +1,1 @@
+{"role":"producer","protocol":"evidence-pipeline","contract":{"t":"send","to":"collector","msg":"evidence.receipt","then":{"t":"offer","from":"collector","branches":[{"label":"accepted","then":{"t":"done"}},{"label":"malformed","then":{"t":"receive","from":"collector","msg":"receipt.rejected","then":{"t":"done"}}}]}}}
