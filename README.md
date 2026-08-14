@@ -115,6 +115,20 @@ Lean theorem `roll_call_run_conforms`. The judge loop originally forced a
 classification changes as they happen — a deviation surfaces within one
 poll interval of being appended.
 
+Second subject: the ship driver loop. `observer/extract_driver.py` +
+`protocols/driver-run.parley` (import → dispatch → attempt →
+land/retry/skip, the retry cycle as a `loop`) audit
+`~/.workbench/driver-state`:
+
+```
+214 traces: 37 complete, 177 stalled, 0 deviating
+```
+
+No deviations — but the stall bands are their own report: 117 runs
+imported and never dispatched, 48 attempts abandoned with no
+land/retry/skip decision, 9 dispatched awaiting a live worker.
+`observer/watch_driver.sh` is the live variant.
+
 ## The wire schema
 
 `contracts/<role>.json`:
