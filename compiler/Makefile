@@ -1,7 +1,16 @@
 GHC ?= ghc
 GHCFLAGS = -Wall -Werror -isrc -outputdir build
 
-.PHONY: build test emit check clean
+.PHONY: build test emit check lint fmt clean
+
+# hlint suggests idiomatic rewrites (declined ones live in .hlint.yaml);
+# ormolu is the no-config canonical formatter. `make fmt` rewrites in place.
+lint:
+	hlint src app test
+	ormolu --mode check src/*.hs app/*.hs test/*.hs
+
+fmt:
+	ormolu --mode inplace src/*.hs app/*.hs test/*.hs
 
 build: bin/parleyc
 

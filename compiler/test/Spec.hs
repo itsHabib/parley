@@ -181,9 +181,9 @@ loopCases =
   where
     -- a pings b until b says stop; c is a declared role left untouched.
     pingLoop =
-      Loop "x" $
-        Message "a" "b" "ping" $
-          Choice "b" ["a"] "again" (Continue "x") "stop" End
+      Loop "x"
+        $ Message "a" "b" "ping"
+        $ Choice "b" ["a"] "again" (Continue "x") "stop" End
 
 eitherToMaybe :: Either e a -> Maybe a
 eitherToMaybe = either (const Nothing) Just

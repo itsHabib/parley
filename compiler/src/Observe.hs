@@ -17,6 +17,7 @@ module Observe
   )
 where
 
+import Data.Either (rights)
 import Protocol (Protocol (..))
 
 data Trace = Trace
@@ -34,7 +35,7 @@ data Outcome
 parseTraces :: String -> [Trace]
 parseTraces source = build (foldr collect [] meaningful)
   where
-    meaningful = filter (not . null) (map words (map stripComment (lines source)))
+    meaningful = filter (not . null) (map (words . stripComment) (lines source))
     stripComment = takeWhile (/= '#')
     collect ["run", runId] acc = Left runId : acc
     collect [sender, receiver, msg] acc = Right (sender, receiver, msg) : acc
@@ -42,7 +43,7 @@ parseTraces source = build (foldr collect [] meaningful)
     build [] = []
     build (Left runId : rest) =
       let (events, remaining) = span isEvent rest
-       in Trace runId [event | Right event <- events] : build remaining
+       in Trace runId (rights events) : build remaining
     build (Right _ : _) = error "trace event before any `run <id>` header"
     isEvent (Right _) = True
     isEvent (Left _) = False

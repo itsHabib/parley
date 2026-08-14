@@ -1,0 +1,5 @@
+# Declined hints, with reasons.
+
+# Tuple sections need a LANGUAGE pragma for no readability gain; the
+# explicit lambda reads fine.
+- ignore: {name: Use tuple-section}
