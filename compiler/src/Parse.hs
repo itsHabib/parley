@@ -11,8 +11,10 @@
 --     down { b -> a: stop }
 --   }
 --
--- A choice ends its block: statements after one would be unreachable on
--- one branch, so the parser refuses them.
+-- Loops: `loop <name> { ... }` repeats when a branch reaches
+-- `continue <name>`; walking off the end of the body exits the loop.
+-- A choice, loop, or continue ends its block: statements after one would
+-- be unreachable on some path, so the parser refuses them.
 module Parse
   ( Parsed (..),
     parseProtocol,
@@ -75,6 +77,14 @@ body tokens =
       (rightLabel, right, afterRight) <- branch afterLeft
       afterChoice <- closeChoice afterRight
       Right (Choice chooser observers leftLabel left rightLabel right, afterChoice)
+    "loop" : name : "{" : rest -> do
+      (loopBody, remaining) <- body rest
+      case remaining of
+        "}" : afterLoop -> Right (Loop name loopBody, afterLoop)
+        token : _ -> Left ("expected } to close loop " ++ name ++ ", got " ++ token)
+        [] -> Left ("unclosed loop " ++ name)
+    "continue" : name : rest
+      | name `notElem` ["{", "}", ":", "->"] -> Right (Continue name, rest)
     sender : "->" : receiver : ":" : payload : rest -> do
       (continuation, remaining) <- body rest
       Right (Message sender receiver payload continuation, remaining)

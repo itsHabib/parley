@@ -8,13 +8,13 @@ import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/otp/actor
 import contract.{type Node, Branch, Offer, Receive, Select, Send}
-import enforce.{type Event, Announce, Payload}
+import enforce.{type Event, Announce, At, Payload}
 import bus.{type AgentMsg, Deliver, Kick}
 
 type State {
   State(
     role: String,
-    node: Node,
+    cursor: enforce.Cursor,
     // Labels to pick at each Select this scenario, outermost first.
     plan: List(String),
     bus: Subject(bus.Msg),
@@ -27,7 +27,7 @@ pub fn start_honest(
   plan: List(String),
   bus_subject: Subject(bus.Msg),
 ) -> actor.StartResult(Subject(AgentMsg)) {
-  actor.new(State(role:, node:, plan:, bus: bus_subject))
+  actor.new(State(role:, cursor: At(node, []), plan:, bus: bus_subject))
   |> actor.on_message(handle_honest)
   |> actor.start
 }
@@ -42,12 +42,12 @@ fn handle_honest(state: State, msg: AgentMsg) -> actor.Next(State, AgentMsg) {
 /// Advance through everything the contract obliges us to emit, stopping
 /// when the contract next expects input (or is done).
 fn drive(state: State) -> State {
-  case state.node {
-    Send(to:, msg:, then:) -> {
+  case enforce.normalize(state.cursor) {
+    At(Send(to:, msg:, then:), env) -> {
       emit(state, Payload(from: state.role, to:, msg:))
-      drive(State(..state, node: then))
+      drive(State(..state, cursor: At(then, env)))
     }
-    Select(observers:, branches:) ->
+    At(Select(observers:, branches:), env) ->
       case state.plan {
         [label, ..plan] ->
           case list.find(branches, fn(branch) { branch.label == label }) {
@@ -55,7 +55,7 @@ fn drive(state: State) -> State {
               list.each(observers, fn(observer) {
                 emit(state, Announce(from: state.role, to: observer, label:))
               })
-              drive(State(..state, node: then, plan:))
+              drive(State(..state, cursor: At(then, env), plan:))
             }
             Error(_) -> state
           }
@@ -67,11 +67,11 @@ fn drive(state: State) -> State {
 
 /// Advance past the input the bus just delivered (it already validated it).
 fn absorb(state: State, event: Event) -> State {
-  case state.node, event {
-    Receive(then:, ..), Payload(..) -> State(..state, node: then)
-    Offer(branches:, ..), Announce(label:, ..) ->
+  case enforce.normalize(state.cursor), event {
+    At(Receive(then:, ..), env), Payload(..) -> State(..state, cursor: At(then, env))
+    At(Offer(branches:, ..), env), Announce(label:, ..) ->
       case list.find(branches, fn(branch) { branch.label == label }) {
-        Ok(Branch(then:, ..)) -> State(..state, node: then)
+        Ok(Branch(then:, ..)) -> State(..state, cursor: At(then, env))
         Error(_) -> state
       }
     _, _ -> state

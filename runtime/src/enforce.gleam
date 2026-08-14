@@ -7,7 +7,7 @@
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import contract.{type Branch, type Node, Done, Offer, Receive, Select, Send}
+import contract.{type Branch, type Node, Continue, Done, Loop, Offer, Receive, Select, Send}
 
 /// What actually moves between agents at runtime: a protocol payload, or a
 /// chooser announcing which branch it took to one observer.
@@ -16,11 +16,36 @@ pub type Event {
   Announce(from: String, to: String, label: String)
 }
 
+/// Loop bodies entered so far, so `Continue` can re-enter them.
+pub type Env =
+  List(#(String, Node))
+
 /// A role's position in its contract. `Announcing` is the transient state of
 /// a chooser that has picked a branch but not yet notified every observer.
 pub type Cursor {
-  At(Node)
-  Announcing(label: String, remaining: List(String), then: Node)
+  At(node: Node, env: Env)
+  Announcing(label: String, remaining: List(String), then: Node, env: Env)
+}
+
+/// Step silently through loop entries and continues until the cursor
+/// rests on a node that exchanges something (or is done). Fuelled as a
+/// backstop; the compiler already refuses unproductive loops.
+pub fn normalize(cursor: Cursor) -> Cursor {
+  do_normalize(cursor, 64)
+}
+
+fn do_normalize(cursor: Cursor, fuel: Int) -> Cursor {
+  case cursor {
+    _ if fuel <= 0 -> cursor
+    At(Loop(name:, then:), env) ->
+      do_normalize(At(then, [#(name, then), ..env]), fuel - 1)
+    At(Continue(name:), env) ->
+      case list.key_find(env, name) {
+        Ok(body) -> do_normalize(At(body, env), fuel - 1)
+        Error(_) -> cursor
+      }
+    _ -> cursor
+  }
 }
 
 pub type Violation {
@@ -33,26 +58,37 @@ pub fn step_out(
   cursor: Cursor,
   event: Event,
 ) -> Result(Cursor, Violation) {
+  let cursor = normalize(cursor)
   case cursor, event {
-    At(Send(to:, msg:, then:)), Payload(from:, to: target, msg: payload)
+    At(Send(to:, msg:, then:), env), Payload(from:, to: target, msg: payload)
       if from == role && target == to && payload == msg
-    -> Ok(At(then))
+    -> Ok(At(then, env))
 
-    At(Select(observers:, branches:)), Announce(from:, to:, label:)
+    At(Select(observers:, branches:), env), Announce(from:, to:, label:)
       if from == role
     ->
       case pick_branch(branches, label), list.contains(observers, to) {
         Some(branch), True ->
-          Ok(advance_announcing(label, list.filter(observers, fn(o) { o != to }), branch.then))
+          Ok(advance_announcing(
+            label,
+            list.filter(observers, fn(o) { o != to }),
+            branch.then,
+            env,
+          ))
         _, _ -> refuse(role, cursor, event)
       }
 
-    Announcing(label: chosen, remaining:, then:), Announce(from:, to:, label:)
+    Announcing(label: chosen, remaining:, then:, env:), Announce(from:, to:, label:)
       if from == role && label == chosen
     ->
       case list.contains(remaining, to) {
         True ->
-          Ok(advance_announcing(chosen, list.filter(remaining, fn(o) { o != to }), then))
+          Ok(advance_announcing(
+            chosen,
+            list.filter(remaining, fn(o) { o != to }),
+            then,
+            env,
+          ))
         False -> refuse(role, cursor, event)
       }
 
@@ -66,16 +102,17 @@ pub fn step_in(
   cursor: Cursor,
   event: Event,
 ) -> Result(Cursor, Violation) {
+  let cursor = normalize(cursor)
   case cursor, event {
-    At(Receive(from:, msg:, then:)), Payload(from: sender, to:, msg: payload)
+    At(Receive(from:, msg:, then:), env), Payload(from: sender, to:, msg: payload)
       if to == role && sender == from && payload == msg
-    -> Ok(At(then))
+    -> Ok(At(then, env))
 
-    At(Offer(from:, branches:)), Announce(from: sender, to:, label:)
+    At(Offer(from:, branches:), env), Announce(from: sender, to:, label:)
       if to == role && sender == from
     ->
       case pick_branch(branches, label) {
-        Some(branch) -> Ok(At(branch.then))
+        Some(branch) -> Ok(At(branch.then, env))
         None -> refuse(role, cursor, event)
       }
 
@@ -84,13 +121,21 @@ pub fn step_in(
 }
 
 pub fn is_done(cursor: Cursor) -> Bool {
-  cursor == At(Done)
+  case normalize(cursor) {
+    At(Done, _) -> True
+    _ -> False
+  }
 }
 
-fn advance_announcing(label: String, remaining: List(String), then: Node) -> Cursor {
+fn advance_announcing(
+  label: String,
+  remaining: List(String),
+  then: Node,
+  env: Env,
+) -> Cursor {
   case remaining {
-    [] -> At(then)
-    _ -> Announcing(label:, remaining:, then:)
+    [] -> At(then, env)
+    _ -> Announcing(label:, remaining:, then:, env:)
   }
 }
 
@@ -113,18 +158,20 @@ pub fn describe_event(event: Event) -> String {
 }
 
 pub fn describe_cursor(cursor: Cursor) -> String {
-  case cursor {
-    At(Done) -> "done (no further obligations)"
-    At(Send(to:, msg:, ..)) -> "send " <> msg <> " to " <> to
-    At(Receive(from:, msg:, ..)) -> "receive " <> msg <> " from " <> from
-    At(Select(observers:, ..)) ->
+  case normalize(cursor) {
+    At(Done, _) -> "done (no further obligations)"
+    At(Send(to:, msg:, ..), _) -> "send " <> msg <> " to " <> to
+    At(Receive(from:, msg:, ..), _) -> "receive " <> msg <> " from " <> from
+    At(Select(observers:, ..), _) ->
       "announce a branch to [" <> string.join(observers, ", ") <> "]"
-    At(Offer(from:, branches:)) ->
+    At(Offer(from:, branches:), _) ->
       "await branch announcement from "
       <> from
       <> " ["
       <> string.join(list.map(branches, fn(b) { b.label }), ", ")
       <> "]"
+    At(Loop(name:, ..), _) -> "enter loop " <> name
+    At(Continue(name:), _) -> "continue loop " <> name
     Announcing(label:, remaining:, ..) ->
       "announce branch:" <> label <> " to [" <> string.join(remaining, ", ") <> "]"
   }

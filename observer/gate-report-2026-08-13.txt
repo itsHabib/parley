@@ -227,5 +227,12 @@ run_9030bc16fbff6784     complete
 run_ad9e01d43c7e400e     complete
 run_eded231339f96c8d     complete
 run_5c3775010d0953cb     complete
+run_a2d24bbc4d18e74d     complete
+run_a44dd4971741b961     complete
+run_be530cb4fb2f2bfe     stalled   [parked] [tojudge] [judged] [parked] [ceiling] [judged] awaiting judge -> gate: judgment
+run_f6e0781979e3e9a9     complete
+run_b3cdf04168cf0388     complete
+run_1d535a0ab6ac09cb     complete
+run_0587a8972aeeae3a     complete
 
-229 traces: 155 complete, 72 stalled, 2 deviating
+236 traces: 161 complete, 73 stalled, 2 deviating

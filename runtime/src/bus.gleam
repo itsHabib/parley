@@ -44,7 +44,7 @@ pub fn start(
 ) -> actor.StartResult(Subject(Msg)) {
   let cursors =
     contracts
-    |> list.map(fn(pair) { #(pair.0, At(pair.1)) })
+    |> list.map(fn(pair) { #(pair.0, At(pair.1, [])) })
     |> dict.from_list
   actor.new(State(cursors:, inboxes: dict.new(), report:, halted: False))
   |> actor.on_message(handle)

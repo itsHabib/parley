@@ -11,6 +11,8 @@ pub type Node {
   Receive(from: String, msg: String, then: Node)
   Select(observers: List(String), branches: List(Branch))
   Offer(from: String, branches: List(Branch))
+  Loop(name: String, then: Node)
+  Continue(name: String)
 }
 
 pub type Branch {
@@ -57,6 +59,15 @@ fn node_decoder() -> decode.Decoder(Node) {
       use from <- decode.field("from", decode.string)
       use branches <- decode.field("branches", decode.list(branch_decoder()))
       decode.success(Offer(from:, branches:))
+    }
+    "loop" -> {
+      use name <- decode.field("name", decode.string)
+      use then <- decode.field("then", node_decoder())
+      decode.success(Loop(name:, then:))
+    }
+    "continue" -> {
+      use name <- decode.field("name", decode.string)
+      decode.success(Continue(name:))
     }
     _ -> decode.failure(Done, "contract node tag")
   }

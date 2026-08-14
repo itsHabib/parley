@@ -8,7 +8,8 @@ import System.Exit (exitFailure)
 main :: IO ()
 main = do
   fileCase <- parityCase
-  let all_ = cases ++ parseCases ++ [fileCase]
+  gateFileCase <- gateCase
+  let all_ = cases ++ loopCases ++ parseCases ++ [fileCase, gateFileCase]
   results <- mapM run all_
   if and results then putStrLn (show (length all_) ++ " ok") else exitFailure
   where
@@ -25,6 +26,18 @@ parityCase = do
     ( "evidence-pipeline.parley parses to the builtin protocol",
       parseProtocol source
         == Right (Parsed "evidence-pipeline" roles validProtocol)
+    )
+
+gateCase :: IO (String, Bool)
+gateCase = do
+  source <- readFile "../protocols/gate-run.parley"
+  pure
+    ( "gate-run.parley parses and compiles for all five roles",
+      case parseProtocol source of
+        Left _ -> False
+        Right parsed ->
+          either (const False) ((== 5) . length) $
+            compile (parsedRoles parsed) (parsedProtocol parsed)
     )
 
 parseCases :: [(String, Bool)]
@@ -138,6 +151,39 @@ cases =
         _ -> False
     )
   ]
+
+loopCases :: [(String, Bool)]
+loopCases =
+  [ ( "a participating role's loop projects to a local loop",
+      case project "a" pingLoop of
+        Right (LoopL "x" (Send "b" "ping" (Offer "b" "again" (ContinueL "x") "stop" Done))) -> True
+        _ -> False
+    ),
+    ( "a role untouched by the loop projects to done",
+      project "c" pingLoop == Right Done
+    ),
+    ( "continue outside any loop is refused",
+      case compile ["a", "b"] (Message "a" "b" "x" (Continue "ghost")) of
+        Left (UnknownLoop [] "ghost") -> True
+        _ -> False
+    ),
+    ( "shadowing loop names are refused",
+      case compile ["a", "b"] (Loop "x" (Message "a" "b" "m" (Loop "x" (Message "a" "b" "m" End)))) of
+        Left (DuplicateLoop [] "x") -> True
+        _ -> False
+    ),
+    ( "a loop that can continue without a message is refused",
+      case compile ["a", "b"] (Loop "x" (Choice "a" ["b"] "go" (Continue "x") "stop" End)) of
+        Left (UnproductiveLoop [] "x") -> True
+        _ -> False
+    )
+  ]
+  where
+    -- a pings b until b says stop; c is a declared role left untouched.
+    pingLoop =
+      Loop "x" $
+        Message "a" "b" "ping" $
+          Choice "b" ["a"] "again" (Continue "x") "stop" End
 
 eitherToMaybe :: Either e a -> Maybe a
 eitherToMaybe = either (const Nothing) Just

@@ -57,7 +57,7 @@ data Failure = Failure
 
 checkTrace :: Protocol -> Trace -> Outcome
 checkTrace protocol trace =
-  case walk protocol (traceEvents trace) of
+  case walk [] protocol (traceEvents trace) of
     Right [] -> Complete
     Right ((sender, receiver, msg) : _) ->
       Deviating ("events continue past the protocol's end: " ++ eventText sender receiver msg)
@@ -65,14 +65,25 @@ checkTrace protocol trace =
       | failStalled failure -> Stalled (failReason failure)
       | otherwise -> Deviating (failReason failure)
 
-walk :: Protocol -> [(String, String, String)] -> Either Failure [(String, String, String)]
-walk End events = Right events
-walk (Message sender receiver payload rest) events =
+-- Terminates on compiled protocols: compile refuses unproductive loops,
+-- so every pass around a loop consumes at least one event.
+walk ::
+  [(String, Protocol)] ->
+  Protocol ->
+  [(String, String, String)] ->
+  Either Failure [(String, String, String)]
+walk _ End events = Right events
+walk env (Loop name body) events = walk ((name, body) : env) body events
+walk env (Continue name) events =
+  case lookup name env of
+    Just body -> walk env body events
+    Nothing -> Left (Failure (length events) False ("continue to unknown loop " ++ name))
+walk env (Message sender receiver payload rest) events =
   case events of
     [] ->
       Left (Failure 0 True ("awaiting " ++ eventText sender receiver payload))
     event@(s, r, p) : remaining
-      | event == (sender, receiver, payload) -> walk rest remaining
+      | event == (sender, receiver, payload) -> walk env rest remaining
       | otherwise ->
           Left
             ( Failure
@@ -80,8 +91,8 @@ walk (Message sender receiver payload rest) events =
                 False
                 ("expected " ++ eventText sender receiver payload ++ "; got " ++ eventText s r p)
             )
-walk (Choice _ _ leftLabel left rightLabel right) events =
-  case (walk left events, walk right events) of
+walk env (Choice _ _ leftLabel left rightLabel right) events =
+  case (walk env left events, walk env right events) of
     (Right remaining, _) -> Right remaining
     (_, Right remaining) -> Right remaining
     (Left leftFailure, Left rightFailure) ->

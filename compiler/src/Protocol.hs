@@ -21,6 +21,8 @@ data Protocol
   = End
   | Message Role Role String Protocol
   | Choice Role [Role] Label Protocol Label Protocol
+  | Loop Label Protocol
+  | Continue Label
   deriving (Eq, Show)
 
 data Local
@@ -29,6 +31,8 @@ data Local
   | Receive Role String Local
   | Select [Role] Label Local Label Local
   | Offer Role Label Local Label Local
+  | LoopL Label Local
+  | ContinueL Label
   deriving (Eq, Show)
 
 data CompileError
@@ -38,12 +42,16 @@ data CompileError
   | DuplicateChoiceLabel [Label] Label
   | ChooserAlsoObserver [Label] Role
   | UnobservableChoice [Label] Role Local Local
+  | UnknownLoop [Label] Label
+  | DuplicateLoop [Label] Label
+  | UnproductiveLoop [Label] Label
   deriving (Eq, Show)
 
 compile :: [Role] -> Protocol -> Either CompileError [(Role, Local)]
 compile roles protocol = do
   validateRoles roles
   validateMentionedRoles roles protocol
+  validateLoops [] [] protocol
   traverse (projectWith protocol) roles
   where
     projectWith value role = fmap (\local -> (role, local)) (project role value)
@@ -56,6 +64,18 @@ project :: Role -> Protocol -> Either CompileError Local
 project role = go []
   where
     go _ End = Right Done
+    go _ (Continue name) = Right (ContinueL name)
+    go path (Loop name body)
+      -- A role mentioned nowhere in the body has no obligations in any
+      -- iteration and needn't know the loop exists; deciding this up
+      -- front also spares it the body's observability requirements.
+      | role `notElem` mentionedRoles body = Right Done
+      | otherwise = do
+          localBody <- go path body
+          Right $
+            if localBody == ContinueL name || localBody == Done
+              then Done
+              else LoopL name localBody
     go path (Message sender receiver payload rest)
       | sender == receiver = Left (SelfMessage path sender payload)
       | role == sender = Send receiver payload <$> go path rest
@@ -93,9 +113,36 @@ validateMentionedRoles roles protocol =
 
 mentionedRoles :: Protocol -> [Role]
 mentionedRoles End = []
+mentionedRoles (Continue _) = []
+mentionedRoles (Loop _ body) = mentionedRoles body
 mentionedRoles (Message sender receiver _ rest) = sender : receiver : mentionedRoles rest
 mentionedRoles (Choice chooser observers _ left _ right) =
   chooser : observers ++ mentionedRoles left ++ mentionedRoles right
+
+-- Loops must be well-scoped (continue names an enclosing loop, names do
+-- not shadow) and productive: a continue reachable without first passing
+-- a message would let the protocol spin without consuming anything.
+validateLoops :: [Label] -> [Label] -> Protocol -> Either CompileError ()
+validateLoops _ _ End = Right ()
+validateLoops scope path (Continue name)
+  | name `elem` scope = Right ()
+  | otherwise = Left (UnknownLoop path name)
+validateLoops scope path (Loop name body)
+  | name `elem` scope = Left (DuplicateLoop path name)
+  | unguardedContinue body = Left (UnproductiveLoop path name)
+  | otherwise = validateLoops (name : scope) path body
+validateLoops scope path (Message _ _ _ rest) = validateLoops scope path rest
+validateLoops scope path (Choice _ _ leftLabel left rightLabel right) = do
+  validateLoops scope (path ++ [leftLabel]) left
+  validateLoops scope (path ++ [rightLabel]) right
+
+unguardedContinue :: Protocol -> Bool
+unguardedContinue End = False
+unguardedContinue (Continue _) = True
+unguardedContinue (Message {}) = False
+unguardedContinue (Loop _ body) = unguardedContinue body
+unguardedContinue (Choice _ _ _ left _ right) =
+  unguardedContinue left || unguardedContinue right
 
 firstDuplicate :: (Eq a) => [a] -> Maybe a
 firstDuplicate = go []
@@ -127,6 +174,10 @@ renderContract role local = role ++ ":\n" ++ render 1 local
         ++ "\n"
         ++ renderBranch depth leftLabel left
         ++ renderBranch depth rightLabel right
+    render depth (LoopL name body) =
+      indent depth ++ "loop " ++ name ++ "\n" ++ render (depth + 1) body
+    render depth (ContinueL name) =
+      indent depth ++ "continue " ++ name ++ "\n"
     renderBranch depth label branch =
       indent (depth + 1) ++ label ++ ":\n" ++ render (depth + 2) branch
     indent depth = replicate (depth * 2) ' '
@@ -150,6 +201,10 @@ renderError compileError =
         ++ oneLine left
         ++ "\n  right: "
         ++ oneLine right
+    UnknownLoop path name -> at path ++ "continue targets no enclosing loop: " ++ name
+    DuplicateLoop path name -> at path ++ "loop name shadows an enclosing loop: " ++ name
+    UnproductiveLoop path name ->
+      at path ++ "loop " ++ name ++ " can continue without exchanging any message"
   where
     at [] = "at root: "
     at path = "at " ++ intercalate "/" path ++ ": "

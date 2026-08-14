@@ -36,6 +36,9 @@ node (Offer chooser leftLabel left rightLabel right) =
       ("from", str chooser),
       ("branches", branches leftLabel left rightLabel right)
     ]
+node (LoopL name body) =
+  obj [("t", str "loop"), ("name", str name), ("then", node body)]
+node (ContinueL name) = obj [("t", str "continue"), ("name", str name)]
 
 branches :: String -> Local -> String -> Local -> String
 branches leftLabel left rightLabel right =
