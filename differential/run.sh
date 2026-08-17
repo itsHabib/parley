@@ -31,13 +31,18 @@ import sys
 traces, report = sys.argv[1], sys.argv[2]
 
 switchboard = {}
+labels = {}
 pending = None
+steps = None
 for line in open(traces):
     line = line.strip()
     if line.startswith("# switchboard replay:"):
         pending = line.endswith("ACCEPTS")
+    elif line.startswith("# steps:"):
+        steps = line[len("# steps:"):].strip()
     elif line.startswith("run ") and pending is not None:
         switchboard[line[4:]] = pending
+        labels[line[4:]] = steps
         pending = None
 
 parley = {}
@@ -59,6 +64,10 @@ if not disagreements:
     raise SystemExit(0)
 for name, a, b in disagreements:
     verdict = "absent" if b is None else ("accepts" if b else "refuses")
-    print(f"DISAGREE {name}: switchboard {'accepts' if a else 'refuses'}, parley {verdict}")
+    print(
+        f"DISAGREE [{labels.get(name)}]: "
+        f"switchboard {'accepts' if a else 'refuses'}, parley {verdict}"
+    )
+print(f"\n{len(disagreements)} disagreement(s)")
 raise SystemExit(1)
 PY

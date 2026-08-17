@@ -152,21 +152,42 @@ each other:
 - **Oracle B** — `protocols/switchboard-session.parley`, that session
   lifecycle written as a protocol and compiled by `parleyc`.
 
-The program builds real journals for 22 event orderings (12 lawful, 10
-out-of-turn), asks switchboard to replay each, and emits the same
-sequences as a parley trace file. `./differential/run.sh` runs both and
-checks they agree, mapping complete/stalled → accepts and deviating →
-refuses:
+The program enumerates **every** ordering of switchboard's ten session
+events up to length four, builds a real journal for each, asks
+switchboard to replay it, and emits the same sequences as a parley trace
+file. `./differential/run.sh` runs both and checks they agree, mapping
+complete/stalled → accepts and deviating → refuses:
 
 ```
-22 sequences, 12 lawful by switchboard
+11110 sequences, 19 lawful by switchboard
 AGREE on every sequence
 ```
 
-This is the switchboard integration done read-only: switchboard is
-unmodified and unaware, but its ordering rules and parley's now
-corroborate each other. Enforcement (the bus policing live sessions)
-is the step after, and this is what de-risks it.
+Two things keep a disagreement meaningful rather than an artefact. Ids
+are filled in from switchboard's *own* folded projection (`evolve.evolve`
+plus `next_request_id` / `pending_tool_call`), so a lawfully ordered
+sequence never fails on a mismatched `req_id`, and every refusal is
+about order. And payloads always satisfy the data predicates.
+
+Enumeration earned its keep immediately: it found an ordering switchboard
+accepts and the protocol refused — `start, user, reply-with-tool, stop`.
+A stop is legal in *every* state, including the window between recording
+the model's intent to call a tool and dispatching it. An earlier
+hand-picked set of 22 sequences missed it.
+
+This is the switchboard integration, and it is deliberately read-only:
+switchboard is unmodified and unaware. The dependency runs parley →
+switchboard and never the reverse, so switchboard's build and CI stay
+free of parley entirely, and parley's CI is where the guard lives.
+
+**Why not enforce inside switchboard?** Because it would subtract more
+than it adds. Switchboard's `transition_valid` is an exhaustive Gleam
+match, so its compiler already forces a decision for every new event
+variant — the module says as much in a comment. Replacing that with a
+JSON-driven contract walk would trade a compile-time exhaustiveness
+guarantee for a file that can silently fail to mention a new event.
+Running both and pinning them against each other keeps the guarantee and
+adds an independent spec; replacing one with the other does not.
 
 Note what the test does *not* cover: parley models order, so the
 sequences vary order alone and carry data switchboard accepts. The data

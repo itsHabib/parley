@@ -1,0 +1,89 @@
+name: ci
+
+# Three planes plus the differential test. The differential job is the
+# standing guard on switchboard: it pits switchboard's own hand-written
+# replay table against protocols/switchboard-session.parley, so if either
+# side drifts, this goes red. It only runs when switchboard is checked out
+# next to parley — the dependency direction is parley -> switchboard and
+# never the reverse, so switchboard's own CI stays free of parley.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  compiler:
+    name: haskell — compile, lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6'
+      - run: make -C compiler build test
+      - name: lint
+        run: |
+          curl -sSL https://raw.github.com/ndmitchell/hlint/master/misc/run.sh \
+            | sh -s compiler/src compiler/app compiler/test
+
+  runtime:
+    name: gleam — enforcement engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27'
+          gleam-version: '1.18.1'
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6'
+      # The runtime demo reads contracts the compiler emits, so build them.
+      - run: make -C compiler build emit
+      - run: gleam test
+        working-directory: runtime
+      - run: gleam run
+        working-directory: runtime
+
+  proofs:
+    name: lean — theorems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: lean
+
+  differential:
+    name: differential — switchboard's guard vs the protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: parley
+      - name: check out switchboard
+        uses: actions/checkout@v4
+        continue-on-error: true
+        id: switchboard
+        with:
+          repository: itsHabib/agents-as-processes-gleam
+          path: agents-as-processes-gleam
+          token: ${{ secrets.SWITCHBOARD_TOKEN || github.token }}
+      - if: steps.switchboard.outcome == 'failure'
+        run: |
+          echo "switchboard not available to this workflow; skipping."
+          echo "Run ./differential/run.sh locally with the repos side by side."
+      - if: steps.switchboard.outcome == 'success'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27'
+          gleam-version: '1.18.1'
+      - if: steps.switchboard.outcome == 'success'
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6'
+      - if: steps.switchboard.outcome == 'success'
+        run: ./differential/run.sh
+        working-directory: parley

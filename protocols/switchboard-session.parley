@@ -41,17 +41,27 @@ loop idle {
           }
           tool_requested {
             model -> session: reply.with.tool
-            session -> tool: call.intent
+            # A stop is legal in every state, including the window between
+            # recording the model's intent to call a tool and dispatching
+            # it. The exhaustive differential test found this gap.
             choice session observes operator model tool {
-              tool_ok {
-                tool -> session: tool.result
-                continue awaiting_model
+              dispatched {
+                session -> tool: call.intent
+                choice session observes operator model tool {
+                  tool_ok {
+                    tool -> session: tool.result
+                    continue awaiting_model
+                  }
+                  tool_failed {
+                    tool -> session: tool.failed
+                    continue idle
+                  }
+                  stopped_in_tool {
+                    session -> operator: session.stopped
+                  }
+                }
               }
-              tool_failed {
-                tool -> session: tool.failed
-                continue idle
-              }
-              stopped_in_tool {
+              stopped_before_dispatch {
                 session -> operator: session.stopped
               }
             }
