@@ -134,10 +134,18 @@ land/retry/skip, the retry cycle as a `loop`) audit
 236 traces: 40 complete, 196 stalled, 0 deviating
 ```
 
-No deviations — but the stall bands are their own report: most runs are
-imported and never dispatched, and a large band are attempts abandoned
-with no land/retry/skip decision. `observer/watch_driver.sh` is the live
-variant.
+No deviations. **Read the stall bands with care, though**: 235 of those
+236 runs carry `manifest.generated_by: "test"` and phase
+`driver-cli-test` — they are fixture runs that leaked into the real
+`~/.workbench/driver-state` ledger, not work. Exactly one run is real
+(`work-driver-prep`, workbench, 2026-08-04) and it completed cleanly. An
+earlier version of this section reported the stall bands as an
+accountability gap; that was measuring the fixtures.
+
+The lesson generalized: an observer is only as good as the provenance of
+the history it replays. `observer/extract_driver.py` should learn to
+filter on `generated_by` before any of these numbers mean anything.
+`observer/watch_driver.sh` is the live variant.
 
 ## Differential test — switchboard's guard vs the protocol
 
