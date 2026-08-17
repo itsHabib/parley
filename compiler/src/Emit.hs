@@ -24,27 +24,26 @@ node (Send peer payload rest) =
   obj [("t", str "send"), ("to", str peer), ("msg", str payload), ("then", node rest)]
 node (Receive peer payload rest) =
   obj [("t", str "receive"), ("from", str peer), ("msg", str payload), ("then", node rest)]
-node (Select observers leftLabel left rightLabel right) =
+node (Select observers choices) =
   obj
     [ ("t", str "select"),
       ("observers", list (map str observers)),
-      ("branches", branches leftLabel left rightLabel right)
+      ("branches", branches choices)
     ]
-node (Offer chooser leftLabel left rightLabel right) =
+node (Offer chooser choices) =
   obj
     [ ("t", str "offer"),
       ("from", str chooser),
-      ("branches", branches leftLabel left rightLabel right)
+      ("branches", branches choices)
     ]
 node (LoopL name body) =
   obj [("t", str "loop"), ("name", str name), ("then", node body)]
 node (ContinueL name) = obj [("t", str "continue"), ("name", str name)]
 
-branches :: String -> Local -> String -> Local -> String
-branches leftLabel left rightLabel right =
-  list [branch leftLabel left, branch rightLabel right]
+branches :: [(String, Local)] -> String
+branches = list . map branch
   where
-    branch label local = obj [("label", str label), ("then", node local)]
+    branch (label, local) = obj [("label", str label), ("then", node local)]
 
 obj :: [(String, String)] -> String
 obj fields = "{" ++ intercalate "," (map field fields) ++ "}"

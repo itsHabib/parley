@@ -92,15 +92,21 @@ walk env (Message sender receiver payload rest) events =
                 False
                 ("expected " ++ eventText sender receiver payload ++ "; got " ++ eventText s r p)
             )
-walk env (Choice _ _ leftLabel left rightLabel right) events =
-  case (walk env left events, walk env right events) of
-    (Right remaining, _) -> Right remaining
-    (_, Right remaining) -> Right remaining
-    (Left leftFailure, Left rightFailure) ->
-      Left (furthest (branded leftLabel leftFailure) (branded rightLabel rightFailure))
+walk env (Choice _ _ branches) events = go (map attempt branches)
   where
-    branded label failure = failure {failReason = "[" ++ label ++ "] " ++ failReason failure}
-    furthest a b = if failRemaining a <= failRemaining b then a else b
+    attempt (label, branch) =
+      case walk env branch events of
+        Right remaining -> Right remaining
+        Left failure ->
+          Left failure {failReason = "[" ++ label ++ "] " ++ failReason failure}
+    -- First branch that consumes the trace wins; otherwise the failure
+    -- that matched the most events explains the mismatch.
+    go [] = Left (Failure (length events) False "choice with no branches")
+    go (Right remaining : _) = Right remaining
+    go (Left failure : rest) =
+      case go rest of
+        Right remaining -> Right remaining
+        Left other -> Left (if failRemaining failure <= failRemaining other then failure else other)
 
 describeOutcome :: Outcome -> String
 describeOutcome Complete = "complete"

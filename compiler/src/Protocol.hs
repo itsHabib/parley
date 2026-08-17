@@ -11,7 +11,7 @@ module Protocol
   )
 where
 
-import Data.List (intercalate)
+import Data.List (intercalate, nub)
 
 type Role = String
 
@@ -20,7 +20,7 @@ type Label = String
 data Protocol
   = End
   | Message Role Role String Protocol
-  | Choice Role [Role] Label Protocol Label Protocol
+  | Choice Role [Role] [(Label, Protocol)]
   | Loop Label Protocol
   | Continue Label
   deriving (Eq, Show)
@@ -29,8 +29,8 @@ data Local
   = Done
   | Send Role String Local
   | Receive Role String Local
-  | Select [Role] Label Local Label Local
-  | Offer Role Label Local Label Local
+  | Select [Role] [(Label, Local)]
+  | Offer Role [(Label, Local)]
   | LoopL Label Local
   | ContinueL Label
   deriving (Eq, Show)
@@ -42,6 +42,7 @@ data CompileError
   | DuplicateChoiceLabel [Label] Label
   | ChooserAlsoObserver [Label] Role
   | UnobservableChoice [Label] Role Local Local
+  | TooFewBranches [Label] Role
   | UnknownLoop [Label] Label
   | DuplicateLoop [Label] Label
   | UnproductiveLoop [Label] Label
@@ -81,23 +82,27 @@ project role = go []
       | role == sender = Send receiver payload <$> go path rest
       | role == receiver = Receive sender payload <$> go path rest
       | otherwise = go path rest
-    go path (Choice chooser observers leftLabel left rightLabel right)
-      | leftLabel == rightLabel = Left (DuplicateChoiceLabel path leftLabel)
+    go path (Choice chooser observers branches)
+      | length branches < 2 = Left (TooFewBranches path chooser)
+      | Just label <- firstDuplicate (map fst branches) =
+          Left (DuplicateChoiceLabel path label)
       | chooser `elem` observers = Left (ChooserAlsoObserver path chooser)
-      | role == chooser =
-          Select observers leftLabel
-            <$> go (path ++ [leftLabel]) left
-            <*> pure rightLabel
-            <*> go (path ++ [rightLabel]) right
+      | role == chooser = Select observers <$> projected
       | otherwise = do
-          leftLocal <- go (path ++ [leftLabel]) left
-          rightLocal <- go (path ++ [rightLabel]) right
+          locals <- projected
           if role `elem` observers
-            then Right (Offer chooser leftLabel leftLocal rightLabel rightLocal)
-            else
-              if leftLocal == rightLocal
-                then Right leftLocal
-                else Left (UnobservableChoice path role leftLocal rightLocal)
+            then Right (Offer chooser locals)
+            else -- An unnotified role must have identical obligations on
+            -- every branch, else it cannot know which one it is in.
+              case nub (map snd locals) of
+                [only] -> Right only
+                first : second : _ -> Left (UnobservableChoice path role first second)
+                [] -> Left (TooFewBranches path chooser)
+      where
+        projected =
+          traverse
+            (\(label, branch) -> (,) label <$> go (path ++ [label]) branch)
+            branches
 
 validateRoles :: [Role] -> Either CompileError ()
 validateRoles roles =
@@ -116,8 +121,8 @@ mentionedRoles End = []
 mentionedRoles (Continue _) = []
 mentionedRoles (Loop _ body) = mentionedRoles body
 mentionedRoles (Message sender receiver _ rest) = sender : receiver : mentionedRoles rest
-mentionedRoles (Choice chooser observers _ left _ right) =
-  chooser : observers ++ mentionedRoles left ++ mentionedRoles right
+mentionedRoles (Choice chooser observers branches) =
+  chooser : observers ++ concatMap (mentionedRoles . snd) branches
 
 -- Loops must be well-scoped (continue names an enclosing loop, names do
 -- not shadow) and productive: a continue reachable without first passing
@@ -132,17 +137,15 @@ validateLoops scope path (Loop name body)
   | unguardedContinue body = Left (UnproductiveLoop path name)
   | otherwise = validateLoops (name : scope) path body
 validateLoops scope path (Message _ _ _ rest) = validateLoops scope path rest
-validateLoops scope path (Choice _ _ leftLabel left rightLabel right) = do
-  validateLoops scope (path ++ [leftLabel]) left
-  validateLoops scope (path ++ [rightLabel]) right
+validateLoops scope path (Choice _ _ branches) =
+  mapM_ (\(label, branch) -> validateLoops scope (path ++ [label]) branch) branches
 
 unguardedContinue :: Protocol -> Bool
 unguardedContinue End = False
 unguardedContinue (Continue _) = True
 unguardedContinue (Message {}) = False
 unguardedContinue (Loop _ body) = unguardedContinue body
-unguardedContinue (Choice _ _ _ left _ right) =
-  unguardedContinue left || unguardedContinue right
+unguardedContinue (Choice _ _ branches) = any (unguardedContinue . snd) branches
 
 firstDuplicate :: (Eq a) => [a] -> Maybe a
 firstDuplicate = go []
@@ -160,20 +163,18 @@ renderContract role local = role ++ ":\n" ++ render 1 local
       indent depth ++ "send " ++ peer ++ " " ++ payload ++ "\n" ++ render depth rest
     render depth (Receive peer payload rest) =
       indent depth ++ "receive " ++ peer ++ " " ++ payload ++ "\n" ++ render depth rest
-    render depth (Select observers leftLabel left rightLabel right) =
+    render depth (Select observers branches) =
       indent depth
         ++ "select for ["
         ++ intercalate ", " observers
         ++ "]\n"
-        ++ renderBranch depth leftLabel left
-        ++ renderBranch depth rightLabel right
-    render depth (Offer chooser leftLabel left rightLabel right) =
+        ++ concatMap (uncurry (renderBranch depth)) branches
+    render depth (Offer chooser branches) =
       indent depth
         ++ "offer from "
         ++ chooser
         ++ "\n"
-        ++ renderBranch depth leftLabel left
-        ++ renderBranch depth rightLabel right
+        ++ concatMap (uncurry (renderBranch depth)) branches
     render depth (LoopL name body) =
       indent depth ++ "loop " ++ name ++ "\n" ++ render (depth + 1) body
     render depth (ContinueL name) =
@@ -201,6 +202,8 @@ renderError compileError =
         ++ oneLine left
         ++ "\n  right: "
         ++ oneLine right
+    TooFewBranches path chooser ->
+      at path ++ "choice by " ++ chooser ++ " needs at least two branches"
     UnknownLoop path name -> at path ++ "continue targets no enclosing loop: " ++ name
     DuplicateLoop path name -> at path ++ "loop name shadows an enclosing loop: " ++ name
     UnproductiveLoop path name ->

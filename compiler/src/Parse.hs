@@ -73,10 +73,8 @@ body tokens =
     "}" : _ -> Right (End, tokens)
     "choice" : chooser : "observes" : rest -> do
       (observers, afterObservers) <- observersUntilBrace rest
-      (leftLabel, left, afterLeft) <- branch afterObservers
-      (rightLabel, right, afterRight) <- branch afterLeft
-      afterChoice <- closeChoice afterRight
-      Right (Choice chooser observers leftLabel left rightLabel right, afterChoice)
+      (branches, afterBranches) <- branchesUntilBrace afterObservers
+      Right (Choice chooser observers branches, afterBranches)
     "loop" : name : "{" : rest -> do
       (loopBody, remaining) <- body rest
       case remaining of
@@ -101,6 +99,18 @@ observersUntilBrace tokens =
   where
     identifier token = token `notElem` ["}", ":", "->", "choice", "observes"]
 
+-- Read labelled branches until the choice's closing brace. Any number is
+-- accepted here; the compiler is what insists on at least two.
+branchesUntilBrace :: [String] -> Either String ([(String, Protocol)], [String])
+branchesUntilBrace tokens =
+  case tokens of
+    "}" : rest -> Right ([], rest)
+    [] -> Left "unclosed choice"
+    _ -> do
+      (label, protocol, afterBranch) <- branch tokens
+      (rest, afterRest) <- branchesUntilBrace afterBranch
+      Right ((label, protocol) : rest, afterRest)
+
 branch :: [String] -> Either String (String, Protocol, [String])
 branch tokens =
   case tokens of
@@ -112,15 +122,3 @@ branch tokens =
         [] -> Left ("unclosed branch " ++ label)
     token : _ -> Left ("expected a branch label, got " ++ token)
     [] -> Left "expected a branch label"
-
-closeChoice :: [String] -> Either String [String]
-closeChoice tokens =
-  case tokens of
-    "}" : rest -> Right rest
-    token : _ ->
-      Left
-        ( "expected } to close the choice, got "
-            ++ token
-            ++ " (a third branch, or statements after a choice, are not allowed)"
-        )
-    [] -> Left "unclosed choice"

@@ -8,9 +8,12 @@ matching protocols/gate-run.parley:
   evidence records (collapsed per block)  -> collector gate evidence.bundle
   verdict block before any judgment       -> panel gate verdicts
   verdict block after a judgment          -> panel gate re.verdicts
-  escalation                              -> gate judge escalation
+  escalation (grant_* question)           -> gate operator escalation.ceiling
+  escalation (anything else)              -> gate judge escalation
   judgment                                -> judge gate judgment
-  action                                  -> gate operator merge.command
+  action, outcome would_merge             -> gate operator merge.command
+  action, outcome blocked                 -> gate operator blocked
+  action, outcome already_merged          -> gate operator noop
   resolution                              -> operator gate resolution
 
 Runs whose only record is grant_needed are refused before a run starts
@@ -36,6 +39,10 @@ def main() -> None:
             # resolution; everything else awaits the judge.
             if kind == "escalation" and record["body"].get("question", "").startswith("grant_"):
                 kind = "ceiling"
+            # An action is not one thing: gate merges, refuses, or finds
+            # nothing to do. Conflating them hid 71 refusals as merges.
+            if kind == "action":
+                kind = "action_" + record["body"].get("outcome", "would_merge")
             runs.setdefault(run, []).append(kind)
 
     skipped = 0
@@ -72,8 +79,12 @@ def events(kinds: list[str]) -> list[str]:
         elif kind == "judgment":
             seen_judgment = True
             out.append("judge gate judgment")
-        elif kind == "action":
+        elif kind == "action_would_merge":
             out.append("gate operator merge.command")
+        elif kind == "action_blocked":
+            out.append("gate operator blocked")
+        elif kind == "action_already_merged":
+            out.append("gate operator noop")
         elif kind == "resolution":
             out.append("operator gate resolution")
         else:

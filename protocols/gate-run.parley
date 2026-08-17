@@ -2,24 +2,30 @@
 # ~/dev/gate/state/log.jsonl and refined until real history classifies
 # cleanly (see observer/extract_gate.py for the record -> event mapping).
 #
-# Collector bundles PR evidence, the verdict panel reports, then each
-# round gate passes (pinned merge command) or parks — to the judge, or to
-# the operator once a grant ceiling is hit. The operator decides how any
-# park comes back: a judge judgment (re-verdict, next round) or a named
-# human resolution (terminal). Formerly a 744-line generated unroll;
-# `loop` expresses it directly.
+# Collector bundles PR evidence. Gate either short-circuits (nothing left
+# to merge) or runs the verdict panel; then each round is one four-way
+# call: pass with the pinned merge command, refuse, park to the judge, or
+# park to the operator because a grant ceiling is hit. The operator
+# decides how a park comes back — a judge judgment (re-verdict, next
+# round) or a named human resolution (terminal).
 protocol gate-run
 roles collector panel gate judge operator
 
 collector -> gate: evidence.bundle
-panel -> gate: verdicts
-loop review {
-  choice gate observes collector panel judge operator {
-    pass {
-      gate -> operator: merge.command
-    }
-    parked {
+choice gate observes collector panel judge operator {
+  noop {
+    gate -> operator: noop
+  }
+  reviewed {
+    panel -> gate: verdicts
+    loop review {
       choice gate observes collector panel judge operator {
+        pass {
+          gate -> operator: merge.command
+        }
+        refused {
+          gate -> operator: blocked
+        }
         tojudge {
           gate -> judge: escalation
           choice operator observes collector panel gate judge {

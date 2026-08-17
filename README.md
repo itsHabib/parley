@@ -93,10 +93,11 @@ First real subject: the gate merge pipeline. `observer/extract_gate.py`
 normalizes `~/dev/gate/state/log.jsonl` into traces;
 `protocols/gate-run.parley` is the gate flow as actually practiced — its
 park/judge/re-verdict cycle expressed with `loop review { ... continue
-review ... }`. Against the full real history:
+review ... }`, and each round a four-way choice (pass / refused /
+to-judge / ceiling). Against the full real history:
 
 ```
-236 traces: 161 complete, 73 stalled, 2 deviating
+254 traces: 171 complete, 81 stalled, 2 deviating
 ```
 
 The stalled are parked runs awaiting a judge/resolution (mostly
@@ -111,6 +112,15 @@ instead of a judge; ceiling parks nonetheless re-judged; one run
 Lean theorem `roll_call_run_conforms`. The judge loop originally forced a
 744-line generated unroll; that pain is why the algebra grew `loop`.
 
+Running the observer again after n-ary choices landed caught two more
+things in live history. A workbench PR 227 run gathered evidence and
+short-circuited with `already_merged` — never running the panel at all,
+a path the protocol did not model (now the `noop` branch, pinned as
+`already_merged_run_conforms`). And chasing it exposed that the extractor
+was flattening gate's three action outcomes — `would_merge` (99),
+`blocked` (71), `already_merged` (1) — into one event, counting 71
+refusals as merges. Both fixed; the model is the more faithful for it.
+
 **Live mode**: `observer/watch_gate.sh` polls the log and prints
 classification changes as they happen — a deviation surfaces within one
 poll interval of being appended.
@@ -121,13 +131,13 @@ land/retry/skip, the retry cycle as a `loop`) audit
 `~/.workbench/driver-state`:
 
 ```
-214 traces: 37 complete, 177 stalled, 0 deviating
+236 traces: 40 complete, 196 stalled, 0 deviating
 ```
 
-No deviations — but the stall bands are their own report: 117 runs
-imported and never dispatched, 48 attempts abandoned with no
-land/retry/skip decision, 9 dispatched awaiting a live worker.
-`observer/watch_driver.sh` is the live variant.
+No deviations — but the stall bands are their own report: most runs are
+imported and never dispatched, and a large band are attempts abandoned
+with no land/retry/skip decision. `observer/watch_driver.sh` is the live
+variant.
 
 ## The wire schema
 
@@ -144,6 +154,11 @@ land/retry/skip decision, 9 dispatched awaiting a live worker.
        | {"t":"loop",    "name":N, "then":<node>}
        | {"t":"continue","name":N}
 ```
+
+Choices are n-ary: `choice <chooser> observes <roles> { l1 {...} l2 {...}
+l3 {...} }` takes any number of labelled branches (at least two — the
+compiler refuses a one-branch "choice"). An unnotified role must have
+identical obligations on *every* branch or projection refuses.
 
 Loops: `loop <name> { ... }` repeats when a path reaches
 `continue <name>`; walking off the end of the body exits. The compiler
@@ -168,8 +183,6 @@ undeclared roles with identical branches do).
 
 ## Where this could go
 
-- N-ary choices, and choices between different responders (judgment vs
-  resolution showed binary single-chooser choice is too narrow).
 - Point switchboard's registry at the bus so real sessions run behind it.
 - Prove projection faithfulness in general, not per-trace.
 - More observed protocols: the ship driver loop, the channel review flows.

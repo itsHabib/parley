@@ -1,9 +1,9 @@
 # One ship driver run, as actually practiced — reverse-engineered from
 # ~/.workbench/driver-state (see observer/extract_driver.py for the
 # record -> event mapping). The operator imports a spec; the driver
-# dispatches a worker and reads its attempt; each round either lands
-# (PR opened, pinned merge, recorded finish), retries with a fresh
-# dispatch, or skips the stream and finishes.
+# dispatches a worker and reads its attempt; each round is one three-way
+# call: land it (PR opened, pinned merge, recorded finish), retry with a
+# fresh dispatch, or skip the stream and finish.
 protocol driver-run
 roles operator driver worker repo
 
@@ -17,16 +17,12 @@ loop attempt {
       driver -> repo: merge
       driver -> operator: finished
     }
-    parked {
-      choice driver observes operator worker repo {
-        retry {
-          continue attempt
-        }
-        skipped {
-          driver -> operator: skipped
-          driver -> operator: finished
-        }
-      }
+    retry {
+      continue attempt
+    }
+    skipped {
+      driver -> operator: skipped
+      driver -> operator: finished
     }
   }
 }

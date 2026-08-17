@@ -133,7 +133,7 @@ dsr_01KZT3GWT9TAX6SM63NPACTC77 stalled   awaiting driver -> worker: dispatch
 dsr_01KZT3GWV0X7YP4KFQ083MT6G3 stalled   awaiting driver -> worker: dispatch
 dsr_01KZT3JR0DPTZY8620X3H6R7SK complete
 dsr_01KZT3JS4X7YBZYAF4TDEGFR80 stalled   [landed] awaiting worker -> repo: pr.opened
-dsr_01KZT3JT7ACXKEDW5SVS3K4JZH stalled   [parked] [retry] [landed] awaiting worker -> repo: pr.opened
+dsr_01KZT3JT7ACXKEDW5SVS3K4JZH stalled   [retry] [landed] awaiting worker -> repo: pr.opened
 dsr_01KZT3JW02EJQNPT8MXGET3ZRJ complete
 dsr_01KZT3JX47FANS8VWRTV3VXB7F complete
 dsr_01KZT49HM2KZP9VWYZTQZYNYH3 stalled   awaiting driver -> worker: dispatch
@@ -160,7 +160,7 @@ dsr_01KZT49TE1RKZJ5X2Y1KH89TY2 stalled   awaiting driver -> worker: dispatch
 dsr_01KZT49TEV5AM88BX2CB382B6G stalled   awaiting driver -> worker: dispatch
 dsr_01KZT4A73TMRQ9884TMZ901RNH complete
 dsr_01KZT4A80E49V10JZQ500M86F1 stalled   [landed] awaiting worker -> repo: pr.opened
-dsr_01KZT4A9171CKC5JR83EKGCN0T stalled   [parked] [retry] [landed] awaiting worker -> repo: pr.opened
+dsr_01KZT4A9171CKC5JR83EKGCN0T stalled   [retry] [landed] awaiting worker -> repo: pr.opened
 dsr_01KZT4AAYHAC2FHYT5TF58GS22 complete
 dsr_01KZT4ABT59KTNQQXDZESSJH82 complete
 dsr_01KZT5SSV21ZJVR7HPW1VFW14T stalled   awaiting driver -> worker: dispatch
@@ -187,7 +187,7 @@ dsr_01KZT5T2NS5353J851WB7PFNND stalled   awaiting driver -> worker: dispatch
 dsr_01KZT5T2PKK5NAF1H3E9B1DD54 stalled   awaiting driver -> worker: dispatch
 dsr_01KZT5WW2E7Y1HR8HX0RHGSPRE complete
 dsr_01KZT5WWZZ3F5VXM8R35EGQQ4F stalled   [landed] awaiting worker -> repo: pr.opened
-dsr_01KZT5WY52HTJNMV8HPRF0Z65E stalled   [parked] [retry] [landed] awaiting worker -> repo: pr.opened
+dsr_01KZT5WY52HTJNMV8HPRF0Z65E stalled   [retry] [landed] awaiting worker -> repo: pr.opened
 dsr_01KZT5X00FCR1MAZB7P04PWZNT complete
 dsr_01KZT5X159NJPD4GG2HHNPHCSB complete
 dsr_01KZT75TT4Z8M7850161TBDQ2Z stalled   awaiting driver -> worker: dispatch
@@ -212,5 +212,27 @@ dsr_01KZT7649BM94YHMVVN07R1CKK stalled   awaiting driver -> worker: dispatch
 dsr_01KZT7649X3YVTDMV3FMA88HBY stalled   awaiting driver -> worker: dispatch
 dsr_01KZT764AC0WSF63G1M9HRHDGB stalled   awaiting driver -> worker: dispatch
 dsr_01KZT764AX627CV8HGSMKJZ6K2 stalled   awaiting driver -> worker: dispatch
+dsr_01M05T9QFFG369SNZACJS3ZZ0Z stalled   awaiting driver -> worker: dispatch
+dsr_01M05T9QFH55F0KDK5Y0W84Y0Y stalled   awaiting driver -> worker: dispatch
+dsr_01M05T9QJKN8Z3KZDDK40J6N0S stalled   awaiting driver -> worker: dispatch
+dsr_01M05T9QMQRWXAY1FFZ3DYW2Q0 stalled   [landed] awaiting worker -> repo: pr.opened
+dsr_01M05T9RTGM6W0KM7W1JF5FVZ6 stalled   [landed] awaiting worker -> repo: pr.opened
+dsr_01M05T9SZTJP3W5YZDHR2FTJ5F stalled   [landed] awaiting worker -> repo: pr.opened
+dsr_01M05T9V4GS3T8PFMKT164XNWH stalled   [landed] awaiting worker -> repo: pr.opened
+dsr_01M05T9W7EN1WX9KVKQZMHD848 complete
+dsr_01M05T9XBDH7BEQJ4QFNA7YN72 complete
+dsr_01M05T9Y9XZY949WV2KXCX7GSW complete
+dsr_01M05T9Z69DKG09CNEX554F6TW stalled   [landed] awaiting worker -> repo: pr.opened
+dsr_01M05TA04YN1S2NE3CBRW9ZRF5 stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA05PJ0C2YZJ9SBDEMW6H stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA06DVFH0Z3B5ASCY10VV stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA072R65PYFY97NM9G7YD stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA07RK0PD9F0V836TY2C1 stalled   awaiting worker -> driver: attempt
+dsr_01M05TA08X682E3RNQ248K8EQX stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA09VYEJHCHRAMBGX59E7 stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA0AJAZEQRW6JJEWGYCT3 stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA0BE6Y4N5QSYWNQS24ZA stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA0C3A14V1JP7X4P8N21R stalled   awaiting driver -> worker: dispatch
+dsr_01M05TA0CSVPFFB2FVREKPZF0R stalled   awaiting driver -> worker: dispatch
 
-214 traces: 37 complete, 177 stalled, 0 deviating
+236 traces: 40 complete, 196 stalled, 0 deviating
