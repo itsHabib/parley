@@ -5,6 +5,7 @@ import Example (invalidProtocol, protocolName, roles, validProtocol)
 import Observe (Outcome (..), Trace (..), checkTrace, describeOutcome, parseTraces)
 import Parse (Parsed (..), parseProtocol)
 import Protocol (compile, renderContract, renderError)
+import System.Directory (doesDirectoryExist)
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
@@ -59,6 +60,13 @@ observe file traceFile = do
 
 compileFile :: FilePath -> FilePath -> IO ()
 compileFile file dir = do
+  present <- doesDirectoryExist dir
+  if not present
+    then die ("no such output directory: " ++ dir)
+    else compileInto file dir
+
+compileInto :: FilePath -> FilePath -> IO ()
+compileInto file dir = do
   source <- readFile file
   case parseProtocol source of
     Left err -> die ("parse error in " ++ file ++ ": " ++ err)

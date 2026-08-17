@@ -2,3 +2,4 @@ compiler/build/
 compiler/bin/
 runtime/build/
 lean/.lake/
+differential/build/

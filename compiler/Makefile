@@ -1,5 +1,5 @@
 GHC ?= ghc
-GHCFLAGS = -Wall -Werror -isrc -outputdir build
+GHCFLAGS = -Wall -Werror -isrc -outputdir build -package directory
 
 .PHONY: build test emit check lint fmt clean
 

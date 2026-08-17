@@ -1,0 +1,70 @@
+# One switchboard session, as its journal records it — derived from
+# ~/dev/agents-as-processes-gleam: the Status machine in src/domain.gleam,
+# the folds in src/evolve.gleam, and the hand-written replay guard
+# `transition_valid` in src/journal.gleam.
+#
+# The status machine this encodes:
+#   Empty        --SessionStarted-->            Idle
+#   Idle         --UserMessageRecorded-->       AwaitingModel
+#   AwaitingModel--ModelRequestEpochRecorded--> AwaitingModel  (retry gen)
+#   AwaitingModel--ModelReplyRecorded(no tool)->Idle
+#   AwaitingModel--ModelReplyRecorded(tool)-->  AwaitingTool
+#   AwaitingModel--ModelFailedRecorded-->       Idle
+#   AwaitingTool --ToolCallIntentRecorded-->    AwaitingTool  (intent set)
+#   AwaitingTool --ToolResultRecorded-->        AwaitingModel
+#   AwaitingTool --ToolFailedRecorded-->        Idle
+#   any          --SessionStopped-->            Stopped (terminal)
+#
+# Parley models ORDER only. The data predicates switchboard also checks —
+# budget >= 0, non-empty text, spent + usage <= budget, req_id/call_id
+# matching, tool-call freshness — are out of scope here by design.
+protocol switchboard-session
+roles operator session model tool
+
+operator -> session: session.started
+loop idle {
+  choice session observes operator model tool {
+    stopped {
+      session -> operator: session.stopped
+    }
+    turn {
+      operator -> session: user.message
+      loop awaiting_model {
+        choice session observes operator model tool {
+          epoch {
+            session -> model: request.epoch
+            continue awaiting_model
+          }
+          replied {
+            model -> session: reply
+            continue idle
+          }
+          tool_requested {
+            model -> session: reply.with.tool
+            session -> tool: call.intent
+            choice session observes operator model tool {
+              tool_ok {
+                tool -> session: tool.result
+                continue awaiting_model
+              }
+              tool_failed {
+                tool -> session: tool.failed
+                continue idle
+              }
+              stopped_in_tool {
+                session -> operator: session.stopped
+              }
+            }
+          }
+          failed {
+            model -> session: model.failed
+            continue idle
+          }
+          stopped_in_model {
+            session -> operator: session.stopped
+          }
+        }
+      }
+    }
+  }
+}

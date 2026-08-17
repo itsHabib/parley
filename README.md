@@ -139,6 +139,41 @@ imported and never dispatched, and a large band are attempts abandoned
 with no land/retry/skip decision. `observer/watch_driver.sh` is the live
 variant.
 
+## Differential test — switchboard's guard vs the protocol
+
+`differential/` is a Gleam project that path-depends on
+[switchboard](https://github.com/itsHabib/agents-as-processes-gleam) and
+puts two independently written specifications of the same thing against
+each other:
+
+- **Oracle A** — switchboard's own replay guard. `journal.replay` re-checks
+  every committed event against the projection it lands on
+  (`transition_valid`, a hand-written exhaustive Gleam table).
+- **Oracle B** — `protocols/switchboard-session.parley`, that session
+  lifecycle written as a protocol and compiled by `parleyc`.
+
+The program builds real journals for 22 event orderings (12 lawful, 10
+out-of-turn), asks switchboard to replay each, and emits the same
+sequences as a parley trace file. `./differential/run.sh` runs both and
+checks they agree, mapping complete/stalled → accepts and deviating →
+refuses:
+
+```
+22 sequences, 12 lawful by switchboard
+AGREE on every sequence
+```
+
+This is the switchboard integration done read-only: switchboard is
+unmodified and unaware, but its ordering rules and parley's now
+corroborate each other. Enforcement (the bus policing live sessions)
+is the step after, and this is what de-risks it.
+
+Note what the test does *not* cover: parley models order, so the
+sequences vary order alone and carry data switchboard accepts. The data
+predicates switchboard also enforces — budget bounds, non-empty text,
+`req_id`/`call_id` matching, tool-call freshness — are outside the
+protocol by design.
+
 ## The wire schema
 
 `contracts/<role>.json`:
