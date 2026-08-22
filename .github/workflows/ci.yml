@@ -25,8 +25,11 @@ jobs:
       - run: make -C compiler build test
       - name: lint
         run: |
+          # -h is required: hlint only auto-discovers .hlint.yaml in the
+          # working directory, and this runs from the repo root while the
+          # config (and the declined hints it records) lives in compiler/.
           curl -sSL https://raw.github.com/ndmitchell/hlint/master/misc/run.sh \
-            | sh -s compiler/src compiler/app compiler/test
+            | sh -s compiler/src compiler/app compiler/test -h compiler/.hlint.yaml
 
   runtime:
     name: gleam — enforcement engine
