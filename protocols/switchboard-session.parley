@@ -1,5 +1,5 @@
 # One switchboard session, as its journal records it — derived from
-# ~/dev/agents-as-processes-gleam: the Status machine in src/domain.gleam,
+# the switchboard repo: the Status machine in src/domain.gleam,
 # the folds in src/evolve.gleam, and the hand-written replay guard
 # `transition_valid` in src/journal.gleam.
 #

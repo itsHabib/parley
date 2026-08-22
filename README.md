@@ -156,9 +156,9 @@ filter on `generated_by` before any of these numbers mean anything.
 ## Differential test — switchboard's guard vs the protocol
 
 `differential/` is a Gleam project that path-depends on
-[switchboard](https://github.com/itsHabib/agents-as-processes-gleam) and
-puts two independently written specifications of the same thing against
-each other:
+[switchboard](https://github.com/itsHabib/switchboard) — a private companion
+repo, so this is the one section here you cannot run — and puts two
+independently written specifications of the same thing against each other:
 
 - **Oracle A** — switchboard's own replay guard. `journal.replay` re-checks
   every committed event against the projection it lands on

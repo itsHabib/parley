@@ -71,7 +71,10 @@ jobs:
         continue-on-error: true
         id: switchboard
         with:
-          repository: itsHabib/agents-as-processes-gleam
+          # Repo is itsHabib/switchboard; the checkout path keeps the old
+          # directory name because differential/gleam.toml path-depends on
+          # ../../agents-as-processes-gleam.
+          repository: itsHabib/switchboard
           path: agents-as-processes-gleam
           token: ${{ secrets.SWITCHBOARD_TOKEN || github.token }}
       - if: steps.switchboard.outcome == 'failure'
