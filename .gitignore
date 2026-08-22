@@ -3,3 +3,4 @@ compiler/bin/
 runtime/build/
 lean/.lake/
 differential/build/
+.DS_Store

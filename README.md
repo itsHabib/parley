@@ -8,10 +8,16 @@ multi-agent workflow — the evidence-carrying-PR pipeline (producer →
 collector → kernel → human → gate) — written **once**, as a single global
 value, from which everything else is derived.
 
-Promoted out of the bakeoff archive: the protocol algebra began as
-`bakeoff/haskell-08-10/protocol-compiler` (scored 82; refused promotion for
-"no immediate adoption boundary"). The Gleam runtime **is** that adoption
-boundary, in the style of switchboard's agents-as-processes.
+```sh
+./demo.sh    # all three planes end to end: compile, prove, enforce
+```
+
+Needs GHC 9.6, Lean 4 (via `elan`), and Gleam 1.18 on OTP 27. Each plane also
+builds on its own — see [Run everything](#run-everything).
+
+The protocol algebra began as a throwaway build-hackathon entry, scored 82 and
+refused promotion for "no immediate adoption boundary." The Gleam runtime **is**
+that adoption boundary.
 
 ## The three planes
 
@@ -237,7 +243,7 @@ observer before proceeding; every declared observer holds an `Offer` (the
 compiler guarantees it — declared observers never silently collapse, only
 undeclared roles with identical branches do).
 
-## Divergences from the bakeoff original
+## Divergences from the original prototype
 
 - Declared observers always get an `Offer`, even when their branches are
   identical — the runtime chooser notifies every declared observer, so every

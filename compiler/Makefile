@@ -15,9 +15,11 @@ fmt:
 build: bin/parleyc
 
 bin/parleyc: src/Protocol.hs src/Emit.hs src/Example.hs src/Parse.hs app/Main.hs
+	@mkdir -p $(@D)
 	$(GHC) $(GHCFLAGS) --make app/Main.hs -o bin/parleyc
 
 bin/spec: src/Protocol.hs src/Example.hs src/Parse.hs test/Spec.hs
+	@mkdir -p $(@D)
 	$(GHC) $(GHCFLAGS) --make test/Spec.hs -o bin/spec
 
 test: bin/spec
