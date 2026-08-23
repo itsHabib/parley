@@ -70,7 +70,14 @@ project role = go []
       -- A role mentioned nowhere in the body has no obligations in any
       -- iteration and needn't know the loop exists; deciding this up
       -- front also spares it the body's observability requirements.
-      | role `notElem` mentionedRoles body = Right Done
+      --
+      -- Unless a path through the body escapes to an enclosing loop.
+      -- Then that branch re-runs the *outer* body, where the role may
+      -- well have obligations, so whether it acts again turns on a
+      -- choice made inside a body that never mentions it. Projecting
+      -- through instead puts that choice in front of the usual
+      -- observability check, which is what refuses it.
+      | role `notElem` mentionedRoles body && not (escapesLoop [name] body) = Right Done
       | otherwise = do
           localBody <- go path body
           Right $
@@ -123,6 +130,17 @@ mentionedRoles (Loop _ body) = mentionedRoles body
 mentionedRoles (Message sender receiver _ rest) = sender : receiver : mentionedRoles rest
 mentionedRoles (Choice chooser observers branches) =
   chooser : observers ++ concatMap (mentionedRoles . snd) branches
+
+-- Whether any path through this protocol reaches a continue bound further
+-- out than the loop being asked about. `bound` accumulates the loops
+-- entered on the way down, so a continue naming one of those stays
+-- inside; anything else leaves.
+escapesLoop :: [Label] -> Protocol -> Bool
+escapesLoop _ End = False
+escapesLoop bound (Continue name) = name `notElem` bound
+escapesLoop bound (Loop name body) = escapesLoop (name : bound) body
+escapesLoop bound (Message _ _ _ rest) = escapesLoop bound rest
+escapesLoop bound (Choice _ _ branches) = any (escapesLoop bound . snd) branches
 
 -- Loops must be well-scoped (continue names an enclosing loop, names do
 -- not shadow) and productive: a continue reachable without first passing

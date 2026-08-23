@@ -235,7 +235,11 @@ Loops: `loop <name> { ... }` repeats when a path reaches
 refuses continues that target no enclosing loop, shadowed loop names, and
 unproductive loops (a continue reachable without exchanging a message).
 A role mentioned nowhere in a loop's body projects to done and is never
-told the loop exists.
+told the loop exists — unless a path through that body escapes to an
+enclosing loop, in which case a branch taken inside it decides whether the
+*outer* body runs again. Then the role is projected through after all, and
+the ordinary observability rule refuses the protocol if the role would
+have to guess.
 
 Runtime events are payloads (`from -> to msg`) or branch announcements
 (`from -> to branch:label`). A chooser announces its pick to every declared
