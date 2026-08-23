@@ -3,52 +3,69 @@
 # cleanly (see observer/extract_gate.py for the record -> event mapping).
 #
 # Collector bundles PR evidence. Gate either short-circuits (nothing left
-# to merge) or runs the verdict panel; then each round is one four-way
-# call: pass with the pinned merge command, refuse, park to the judge, or
-# park to the operator because a grant ceiling is hit. The operator
-# decides how a park comes back — a judge judgment (re-verdict, next
-# round) or a named human resolution (terminal).
+# to merge) or runs the verdict panel. Having seen the verdicts it may
+# re-gather — CI finishes, a bot posts, a push lands — and run the panel
+# again on the fresher bundle; only when it stops re-gathering does it
+# decide. Then each round is one four-way call: pass with the pinned merge
+# command, refuse, park to the judge, or park to the operator because a
+# grant ceiling is hit. The operator decides how a park comes back — a
+# judge judgment (re-verdict, next round) or a named human resolution
+# (terminal).
+#
+# The re-gather loop was added after the observer showed 41 real runs
+# deviating on exactly this: `bundle, verdicts, bundle, verdicts, blocked`
+# (run_d8e2c531d8f2c13e among them). The protocol was under-specified, not
+# gate.
 protocol gate-run
 roles collector panel gate judge operator
 
-collector -> gate: evidence.bundle
-choice gate observes collector panel judge operator {
-  noop {
-    gate -> operator: noop
-  }
-  reviewed {
-    panel -> gate: verdicts
-    loop review {
+loop gather {
+  collector -> gate: evidence.bundle
+  choice gate observes collector panel judge operator {
+    noop {
+      gate -> operator: noop
+    }
+    reviewed {
+      panel -> gate: verdicts
       choice gate observes collector panel judge operator {
-        pass {
-          gate -> operator: merge.command
+        regather {
+          continue gather
         }
-        refused {
-          gate -> operator: blocked
-        }
-        tojudge {
-          gate -> judge: escalation
-          choice operator observes collector panel gate judge {
-            judged {
-              judge -> gate: judgment
-              panel -> gate: re.verdicts
-              continue review
-            }
-            resolved {
-              operator -> gate: resolution
-            }
-          }
-        }
-        ceiling {
-          gate -> operator: escalation.ceiling
-          choice operator observes collector panel gate judge {
-            judged {
-              judge -> gate: judgment
-              panel -> gate: re.verdicts
-              continue review
-            }
-            resolved {
-              operator -> gate: resolution
+        decide {
+          loop review {
+            choice gate observes collector panel judge operator {
+              pass {
+                gate -> operator: merge.command
+              }
+              refused {
+                gate -> operator: blocked
+              }
+              tojudge {
+                gate -> judge: escalation
+                choice operator observes collector panel gate judge {
+                  judged {
+                    judge -> gate: judgment
+                    panel -> gate: re.verdicts
+                    continue review
+                  }
+                  resolved {
+                    operator -> gate: resolution
+                  }
+                }
+              }
+              ceiling {
+                gate -> operator: escalation.ceiling
+                choice operator observes collector panel gate judge {
+                  judged {
+                    judge -> gate: judgment
+                    panel -> gate: re.verdicts
+                    continue review
+                  }
+                  resolved {
+                    operator -> gate: resolution
+                  }
+                }
+              }
             }
           }
         }

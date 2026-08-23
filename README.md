@@ -97,19 +97,38 @@ protocol and classifies each: **complete** (walks the protocol exactly),
 
 First real subject: the gate merge pipeline. `observer/extract_gate.py`
 normalizes `~/dev/gate/state/log.jsonl` into traces;
-`protocols/gate-run.parley` is the gate flow as actually practiced — its
-park/judge/re-verdict cycle expressed with `loop review { ... continue
-review ... }`, and each round a four-way choice (pass / refused /
-to-judge / ceiling). Against the full real history:
+`protocols/gate-run.parley` is the gate flow as actually practiced — an
+outer `loop gather` for evidence re-polling, its park/judge/re-verdict
+cycle expressed with `loop review { ... continue review ... }`, and each
+round a four-way choice (pass / refused / to-judge / ceiling). Against the
+full real history:
 
 ```
-254 traces: 171 complete, 81 stalled, 2 deviating
+399 traces: 248 complete, 140 stalled, 11 deviating
 ```
 
 The stalled are parked runs awaiting a judge/resolution (mostly
 superseded — gate opens a fresh run per invocation and old parks stay
-parked) plus in-flight runs. The 2 deviating are an Aug 2–4 2026 gate
-behavior that stamped a resolution after a judged merge, since dropped.
+parked) plus in-flight runs. The 11 deviating are all one open question,
+recorded in `observer/gate-run.expected` rather than modelled away: a
+resolution (10) or a judgment (1) stamped onto a run that had already
+emitted its merge command or its block. Whether a post-terminal
+resolution confers merge authority is not something the log can answer,
+so the protocol declines to assert one and the shape is raised with gate
+as a finding.
+
+**The observer is a check, not just a report.** Given a baseline it exits
+non-zero on a deviation shape nobody has written down — and equally on a
+baseline line that no longer describes anything, because a file that only
+grows is not a check:
+
+```sh
+make -C observer check      # audits gate's live log
+make -C observer baseline   # shows today's shapes, to be written up by hand
+```
+
+It stays out of CI on purpose: the gate log is local and private, and does
+not exist on a runner.
 
 Writing the protocol *discovered* structure the mental model missed:
 ceiling parks (grant cycles exhausted) answered by a human resolution
