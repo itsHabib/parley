@@ -14,9 +14,12 @@ module Observe
     parseTraces,
     checkTrace,
     describeOutcome,
+    deviationShape,
+    parseBaseline,
   )
 where
 
+import Data.Char (isAsciiLower, isHexDigit)
 import Data.Either (rights)
 import Protocol (Protocol (..))
 
@@ -107,6 +110,30 @@ walk env (Choice _ _ branches) events = go (map attempt branches)
       case go rest of
         Right remaining -> Right remaining
         Left other -> Left (if failRemaining failure <= failRemaining other then failure else other)
+
+-- A deviation's *shape*: its reason with concrete identifiers replaced by
+-- a placeholder. A baseline lists shapes, never trace ids, so it pins the
+-- class of surprise rather than the particular run that produced it —
+-- baselining on ids would rot the file every time gate opens a run.
+deviationShape :: String -> String
+deviationShape = unwords . map anonymize . words
+  where
+    anonymize token =
+      case break (== '_') token of
+        (prefix, '_' : suffix)
+          | not (null prefix),
+            all isAsciiLower prefix,
+            length suffix >= 8,
+            all isHexDigit suffix ->
+              prefix ++ "_<id>"
+        _ -> token
+
+-- A baseline file is the same plain-text shape as a trace file: one
+-- accepted deviation shape per line, `#` comments and blank lines ignored.
+parseBaseline :: String -> [String]
+parseBaseline = filter (not . null) . map (unwords . words . stripComment) . lines
+  where
+    stripComment = takeWhile (/= '#')
 
 describeOutcome :: Outcome -> String
 describeOutcome Complete = "complete"

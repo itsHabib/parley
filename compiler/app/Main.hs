@@ -1,8 +1,9 @@
 module Main (main) where
 
+import Data.List (nub)
 import Emit (contractFile)
 import Example (invalidProtocol, protocolName, roles, validProtocol)
-import Observe (Outcome (..), Trace (..), checkTrace, describeOutcome, parseTraces)
+import Observe (Outcome (..), Trace (..), checkTrace, describeOutcome, deviationShape, parseBaseline, parseTraces)
 import Parse (Parsed (..), parseProtocol)
 import Protocol (compile, renderContract, renderError)
 import System.Directory (doesDirectoryExist)
@@ -15,15 +16,16 @@ main = do
   args <- getArgs
   case args of
     ["compile", file, dir] -> compileFile file dir
-    ["observe", file, traceFile] -> observe file traceFile
+    ["observe", file, traceFile] -> observe file traceFile Nothing
+    ["observe", file, traceFile, baselineFile] -> observe file traceFile (Just baselineFile)
     ["emit", dir] -> emit dir
     ["check"] -> check
     _ -> do
-      hPutStrLn stderr "usage: parleyc compile <file.parley> <dir> | parleyc observe <file.parley> <trace> | parleyc emit <dir> | parleyc check"
+      hPutStrLn stderr "usage: parleyc compile <file.parley> <dir> | parleyc observe <file.parley> <trace> [baseline] | parleyc emit <dir> | parleyc check"
       exitFailure
 
-observe :: FilePath -> FilePath -> IO ()
-observe file traceFile = do
+observe :: FilePath -> FilePath -> Maybe FilePath -> IO ()
+observe file traceFile baselineFile = do
   source <- readFile file
   case parseProtocol source of
     Left err -> die ("parse error in " ++ file ++ ": " ++ err)
@@ -37,6 +39,7 @@ observe file traceFile = do
           mapM_ report outcomes
           putStrLn ""
           putStrLn (summary (map snd outcomes))
+          maybe (pure ()) (audit (map snd outcomes)) baselineFile
   where
     report (trace, outcome) =
       putStrLn (pad (traceId trace) ++ " " ++ describeOutcome outcome)
@@ -57,6 +60,34 @@ observe file traceFile = do
     isDeviating outcome = case outcome of
       Deviating _ -> True
       _ -> False
+
+-- With a baseline the observer stops being a report and becomes a check.
+-- Both halves matter: a deviation nobody has written down fails, and so
+-- does a baseline line that no longer describes anything. Without the
+-- second half the file only ever grows, and a check that cannot go red
+-- for the right reason is watching nothing.
+audit :: [Outcome] -> FilePath -> IO ()
+audit outcomes baselineFile = do
+  accepted <- parseBaseline <$> readFile baselineFile
+  let shapes = nub [deviationShape reason | Deviating reason <- outcomes]
+      unexpected = filter (`notElem` accepted) shapes
+      stale = filter (`notElem` shapes) accepted
+  putStrLn ""
+  mapM_ (putStrLn . ("UNEXPECTED  " ++)) unexpected
+  mapM_ (putStrLn . ("STALE       " ++)) stale
+  if null unexpected && null stale
+    then putStrLn (show (length accepted) ++ " accepted deviation shapes, every one still present")
+    else do
+      hPutStrLn
+        stderr
+        ( show (length unexpected)
+            ++ " unexpected, "
+            ++ show (length stale)
+            ++ " stale; "
+            ++ baselineFile
+            ++ " needs a line — with a reason — for each"
+        )
+      exitFailure
 
 compileFile :: FilePath -> FilePath -> IO ()
 compileFile file dir = do
