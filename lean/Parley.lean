@@ -104,6 +104,25 @@ def firstDuplicate : List String → Option String
   | [] => none
   | value :: rest => if value ∈ rest then some value else firstDuplicate rest
 
+/-! Whether any path through this protocol reaches a continue bound
+further out than the loop being asked about (`compiler/src/Protocol.hs`
+`escapesLoop`). `bound` accumulates the loops entered on the way down, so
+a continue naming one of those stays inside; anything else leaves. -/
+mutual
+
+def escapesLoop (bound : List Label) : Protocol → Bool
+  | .done => false
+  | .cont name => !bound.contains name
+  | .loop name body => escapesLoop (name :: bound) body
+  | .message _ _ _ rest => escapesLoop bound rest
+  | .choice _ _ branches => escapesLoopIn bound branches
+
+def escapesLoopIn (bound : List Label) : List (Label × Protocol) → Bool
+  | [] => false
+  | (_, branch) :: rest => escapesLoop bound branch || escapesLoopIn bound rest
+
+end
+
 /-! Projection, mirroring the Haskell `project` decision for decision:
 declared observers always receive an offer; undeclared roles may collapse
 branches only when every branch leaves them identical obligations;
@@ -114,7 +133,10 @@ def projectAt (role : Role) : Protocol → List Label → Except CompileError Lo
   | .done, _ => .ok .done
   | .cont name, _ => .ok (.contL name)
   | .loop name body, path =>
-    if role ∈ mentionedRoles body then
+    -- A body that can escape to an enclosing loop decides whether the
+    -- *outer* body runs again, so a role with obligations out there must
+    -- be projected through even when this body never mentions it.
+    if (mentionedRoles body).contains role || escapesLoop [name] body then
       (projectAt role body path).map fun localBody =>
         if localEq localBody (.contL name) || localEq localBody .done then .done
         else .loopL name localBody
@@ -491,6 +513,31 @@ theorem unproductive_loop_refused :
     (match compile ["a", "b"]
         (.loop "x" (.choice "a" ["b"] [("go", .cont "x"), ("stop", .done)])) with
       | .error (.unproductiveLoop [] "x") => true
+      | _ => false) = true := by
+  native_decide
+
+/-- c decides whether the outer loop goes round again, and a — whose send
+sits in that outer body — is nowhere in the inner one. Dropping a from the
+inner loop would hand it a contract saying "send once, done" while the
+protocol may require it to send again, so projection must refuse. -/
+theorem escaping_inner_loop_refused :
+    (match compile ["a", "b", "c", "d"]
+        (.loop "o" (.message "a" "b" "m"
+          (.loop "i" (.message "c" "d" "n"
+            (.choice "c" ["d"] [("again", .cont "i"), ("out", .cont "o")]))))) with
+      | .error (.unobservableChoice [] "a") => true
+      | _ => false) = true := by
+  native_decide
+
+/-- The same shape with the inner choice staying inside its own loop: the
+outer body then runs exactly once, so dropping the bystander is correct
+and the refusal above must not fire. -/
+theorem bound_inner_loop_still_collapses :
+    (match project "a"
+        (.loop "o" (.message "a" "b" "m"
+          (.loop "i" (.message "c" "d" "n"
+            (.choice "c" ["d"] [("again", .cont "i"), ("stop", .done)]))))) with
+      | .ok (.loopL "o" (.send "b" "m" .done)) => true
       | _ => false) = true := by
   native_decide
 

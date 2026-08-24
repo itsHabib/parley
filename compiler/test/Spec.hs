@@ -191,6 +191,14 @@ loopCases =
         (Loop "x" (Choice "a" ["b"] [("go", Continue "x"), ("stop", End)])) of
         Left (UnproductiveLoop [] "x") -> True
         _ -> False
+    ),
+    ( "a bystander to an inner loop that escapes outward is refused",
+      case compile ["a", "b", "c", "d"] escapingLoop of
+        Left (UnobservableChoice [] "a" (ContinueL "i") (ContinueL "o")) -> True
+        _ -> False
+    ),
+    ( "a bystander to an inner loop whose continues stay bound still collapses",
+      project "a" boundLoop == Right (LoopL "o" (Send "b" "m" Done))
     )
   ]
   where
@@ -199,6 +207,25 @@ loopCases =
       Loop "x"
         $ Message "a" "b" "ping"
         $ Choice "b" ["a"] [("again", Continue "x"), ("stop", End)]
+
+    -- c decides whether the outer loop goes round again, and a — whose
+    -- send sits in that outer body — is nowhere in the inner one. Whether
+    -- a sends again therefore depends on a branch a is never told about.
+    escapingLoop =
+      Loop "o"
+        $ Message "a" "b" "m"
+        $ Loop "i"
+        $ Message "c" "d" "n"
+        $ Choice "c" ["d"] [("again", Continue "i"), ("out", Continue "o")]
+
+    -- The same shape with the inner choice staying inside its own loop.
+    -- The outer body then runs exactly once, so dropping a is correct.
+    boundLoop =
+      Loop "o"
+        $ Message "a" "b" "m"
+        $ Loop "i"
+        $ Message "c" "d" "n"
+        $ Choice "c" ["d"] [("again", Continue "i"), ("stop", End)]
 
 eitherToMaybe :: Either e a -> Maybe a
 eitherToMaybe = either (const Nothing) Just
