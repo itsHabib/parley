@@ -16,12 +16,18 @@ PARLEYC := ../compiler/bin/parleyc
 GATE_LOG := $(HOME)/dev/gate/state/log.jsonl
 TRACES := $(shell echo $${TMPDIR:-/tmp})/parley-gate-traces.txt
 
-.PHONY: check baseline traces
+.PHONY: check baseline traces compiler
 
-$(PARLEYC):
-	$(MAKE) -C ../compiler build
+# Always delegate; the compiler's own Makefile decides whether to relink.
+# A rule on `$(PARLEYC)` would fire only when the binary is *absent*, so a
+# stale one — `compiler/bin/` is gitignored, and every checkout carries
+# whatever was last built there — would run the check against an old
+# protocol and an old classifier. That is precisely the quiet wrongness
+# this check exists to catch, so it must not be how the check is built.
+compiler:
+	@$(MAKE) -C ../compiler build
 
-traces: $(PARLEYC)
+traces: compiler
 	@test -r $(GATE_LOG) || { echo "no gate log at $(GATE_LOG)"; exit 1; }
 	@python3 extract_gate.py > $(TRACES)
 
