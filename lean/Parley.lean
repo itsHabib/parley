@@ -394,17 +394,25 @@ private def parkResponse : Protocol :=
       ("resolved", .message "operator" "gate" "resolution" .done) ]
 
 def gateProtocol : Protocol :=
-  .message "collector" "gate" "evidence.bundle" <|
-    .choice "gate" ["collector", "panel", "judge", "operator"]
-      [ ("noop", .message "gate" "operator" "noop" .done),
-        ("reviewed",
-          .message "panel" "gate" "verdicts" <|
-            .loop "review" <|
+  .loop "gather" <|
+    .message "collector" "gate" "evidence.bundle" <|
+      .choice "gate" ["collector", "panel", "judge", "operator"]
+        [ ("noop", .message "gate" "operator" "noop" .done),
+          ("reviewed",
+            .message "panel" "gate" "verdicts" <|
+              -- Having seen the verdicts gate may re-gather — CI finishes,
+              -- a bot posts, a push lands — and re-run the panel on the
+              -- fresher bundle. 41 real runs deviated on exactly this.
               .choice "gate" ["collector", "panel", "judge", "operator"]
-                [ ("pass", .message "gate" "operator" "merge.command" .done),
-                  ("refused", .message "gate" "operator" "blocked" .done),
-                  ("tojudge", .message "gate" "judge" "escalation" parkResponse),
-                  ("ceiling", .message "gate" "operator" "escalation.ceiling" parkResponse) ]) ]
+                [ ("regather", .cont "gather"),
+                  ("decide",
+                    .loop "review" <|
+                      .choice "gate" ["collector", "panel", "judge", "operator"]
+                        [ ("pass", .message "gate" "operator" "merge.command" .done),
+                          ("refused", .message "gate" "operator" "blocked" .done),
+                          ("tojudge", .message "gate" "judge" "escalation" parkResponse),
+                          ("ceiling",
+                            .message "gate" "operator" "escalation.ceiling" parkResponse) ]) ]) ]
 
 /-- run_58f47c1b3f771b50 (roll-call PR 11): the deepest run in gate's real
 history — parked four times, judged four times, merged on the fourth. -/

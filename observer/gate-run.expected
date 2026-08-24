@@ -1,0 +1,29 @@
+# Deviation shapes accepted against protocols/gate-run.parley.
+#
+# `make -C observer check` fails on a deviation shape absent from this
+# file, AND on a line here that no longer describes anything in the log.
+# The second half is what keeps the check honest: a baseline that only
+# grows is a file, not a check.
+#
+# Every line needs a reason. A shape recorded without one is a modelling
+# gap being hidden, which is the opposite of what the observer is for.
+#
+# Shapes are normalized — run identifiers become `<id>` — so this file
+# pins the class of surprise, not the run that produced it, and does not
+# rot as gate opens runs.
+#
+# ---------------------------------------------------------------------
+#
+# A resolution recorded AFTER a terminal action (10 runs as of
+# 2026-08-23). gate stamped a named human resolution onto a run that had
+# already emitted its merge command or its block. Deliberately NOT
+# modelled: whether a post-terminal resolution confers merge authority is
+# a question the log cannot answer, and adding a branch for it would
+# assert an answer. Raised with gate as a finding; run ids are in the
+# observer output, not here, so this line survives new occurrences.
+events continue past the protocol's end: operator -> gate: resolution
+
+# The same shape with a judge judgment instead of an operator resolution
+# (1 run). Same reasoning, same open question, and it is the rarer half —
+# worth watching separately in case it is the one that grows.
+events continue past the protocol's end: judge -> gate: judgment
