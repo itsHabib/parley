@@ -1,8 +1,10 @@
 module Main (main) where
 
+import Control.Monad (when)
 import Data.List (nub)
 import Emit (contractFile)
 import Example (invalidProtocol, protocolName, roles, validProtocol)
+import GHC.IO.Encoding (setLocaleEncoding, utf8)
 import Observe (Outcome (..), Trace (..), checkTrace, describeOutcome, deviationShape, parseBaseline, parseTraces)
 import Parse (Parsed (..), parseProtocol)
 import Protocol (compile, renderContract, renderError)
@@ -13,19 +15,21 @@ import System.IO (hPutStrLn, stderr)
 
 main :: IO ()
 main = do
+  setLocaleEncoding utf8
   args <- getArgs
   case args of
     ["compile", file, dir] -> compileFile file dir
-    ["observe", file, traceFile] -> observe file traceFile Nothing
-    ["observe", file, traceFile, baselineFile] -> observe file traceFile (Just baselineFile)
+    ["verify", file, traceFile] -> observe file traceFile Nothing True
+    ["observe", file, traceFile] -> observe file traceFile Nothing False
+    ["observe", file, traceFile, baselineFile] -> observe file traceFile (Just baselineFile) False
     ["emit", dir] -> emit dir
     ["check"] -> check
     _ -> do
-      hPutStrLn stderr "usage: parleyc compile <file.parley> <dir> | parleyc observe <file.parley> <trace> [baseline] | parleyc emit <dir> | parleyc check"
+      hPutStrLn stderr "usage: parleyc verify <file.parley> <trace> | parleyc compile <file.parley> <dir> | parleyc observe <file.parley> <trace> [baseline] | parleyc emit <dir> | parleyc check"
       exitFailure
 
-observe :: FilePath -> FilePath -> Maybe FilePath -> IO ()
-observe file traceFile baselineFile = do
+observe :: FilePath -> FilePath -> Maybe FilePath -> Bool -> IO ()
+observe file traceFile baselineFile strict = do
   source <- readFile file
   case parseProtocol source of
     Left err -> die ("parse error in " ++ file ++ ": " ++ err)
@@ -34,12 +38,15 @@ observe file traceFile baselineFile = do
       case compile (parsedRoles parsed) (parsedProtocol parsed) of
         Left err -> die ("refused: " ++ renderError err)
         Right _ -> do
-          traces <- parseTraces <$> readFile traceFile
+          input <- readFile traceFile
+          traces <- either die pure (parseTraces input)
           let outcomes = map (\t -> (t, checkTrace (parsedProtocol parsed) t)) traces
           mapM_ report outcomes
           putStrLn ""
           putStrLn (summary (map snd outcomes))
           maybe (pure ()) (audit (map snd outcomes)) baselineFile
+          when (strict && (null outcomes || any ((/= Complete) . snd) outcomes)) $
+            die "verification failed: expected at least one trace and every trace complete"
   where
     report (trace, outcome) =
       putStrLn (pad (traceId trace) ++ " " ++ describeOutcome outcome)
@@ -119,7 +126,7 @@ compileInto file dir = do
     write name (role, local) =
       writeFile (dir ++ "/" ++ role ++ ".json") (contractFile name role local)
 
-die :: String -> IO ()
+die :: String -> IO a
 die message = hPutStrLn stderr message >> exitFailure
 
 emit :: FilePath -> IO ()

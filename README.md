@@ -1,23 +1,61 @@
 # parley
 
-A three-language agent coordination kernel: **Haskell compiles the protocol,
-Gleam enforces it at runtime, Lean proves the two agree.**
+Check whether recorded messages follow a protocol, without changing the service
+that produced them. Start with the offline CLI; the optional Gleam runtime and
+Lean proofs explore enforcement separately.
 
-A *parley* is a conversation conducted under protocol. Here the protocol is a
-multi-agent workflow — the evidence-carrying-PR pipeline (producer →
-collector → kernel → human → gate) — written **once**, as a single global
-value, from which everything else is derived.
+**Status: experimental.** This is an order checker, not a durable workflow
+engine. It does not establish payload correctness, evidence freshness, delivery,
+exactly-once effects, or merge authority. No external adoption is claimed.
+
+## First run: a CI check from a trace
+
+Requires Git, Make and GHC (tested with 9.4 and 9.14). No Hackage downloads,
+credentials, daemon, private repositories, Gleam, Lean, or portfolio tools.
 
 ```sh
-./demo.sh    # all three planes end to end: compile, prove, enforce
+git clone https://github.com/itsHabib/parley.git
+cd parley
+make -C compiler build test
+make -C compiler install PREFIX="$HOME/.local"
+"$HOME/.local/bin/parleyc" verify examples/ci-check/review.parley examples/ci-check/complete.trace
 ```
 
-Needs GHC 9.6, Lean 4 (via `elan`), and Gleam 1.18 on OTP 27. Each plane also
-builds on its own — see [Run everything](#run-everything).
+The last command prints `2 traces: 2 complete, 0 stalled, 0 deviating` and exits
+0. Try `examples/ci-check/broken.trace` instead: it names the expected and actual
+message and exits 1. That is the command to put in CI:
 
-The protocol algebra began as a throwaway build-hackathon entry, scored 82 and
-refused promotion for "no immediate adoption boundary." The Gleam runtime **is**
-that adoption boundary.
+```sh
+parleyc verify workflow.parley recorded.trace
+```
+
+[The example guide](examples/ci-check/README.md) explains how to export your own
+trace and inspect an interrupted run. A direct assertion is simpler for a fixed,
+short sequence. Parley is worth testing when branching and loops make a shared,
+reviewable protocol useful across independent participants.
+
+`make -C compiler install PREFIX=/some/path` installs just `bin/parleyc`.
+`DESTDIR` is supported for packaging. The compiled executable needs its platform
+system libraries, but no Haskell packages or source tree at runtime. There are
+no published binary releases yet; source compilation is the installation path.
+
+To reproduce the isolated Linux first-run check, run `scripts/test-clean.sh`
+with Docker. It provisions standard Ubuntu build tools, then builds, tests and
+installs with networking disabled and no host home directory mounted.
+
+## Optional: enforcement and proofs
+
+The research implementation has three planes: Haskell compiles the protocol,
+Gleam enforces it at runtime, and Lean checks example-specific agreement.
+A protocol is one global value projected into each participant's contract.
+These examples do not constitute a general proof of projection faithfulness.
+
+```sh
+./demo.sh
+```
+
+This full demo needs GHC 9.6, Lean 4 (via `elan`), and Gleam 1.18 on OTP 27.
+Each plane also builds independently.
 
 ## The three planes
 
