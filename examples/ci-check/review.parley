@@ -1,0 +1,9 @@
+# Order of a review request and its terminal result.
+protocol review
+roles author reviewer
+
+author -> reviewer: request
+choice reviewer observes author {
+  approved { reviewer -> author: approved }
+  rejected { reviewer -> author: rejected }
+}

@@ -23,6 +23,11 @@ jobs:
         with:
           ghc-version: '9.6'
       - run: make -C compiler build test
+      - name: installed CLI
+        run: |
+          make -C compiler install PREFIX="$RUNNER_TEMP/parley"
+          cd compiler
+          PARLEYC="$RUNNER_TEMP/parley/bin/parleyc" sh test/cli.sh
       - name: lint
         run: |
           # -h is required: hlint only auto-discovers .hlint.yaml in the
